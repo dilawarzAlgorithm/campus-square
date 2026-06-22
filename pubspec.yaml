@@ -35,7 +35,10 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   flutter_launcher_icons: ^0.14.4
-  flutter_native_splash: ^2.4.7
+  provider: ^6.1.5+1
+  flutter_secure_storage: ^10.3.1
+  http: ^1.6.0
+  flutter_dotenv: ^6.0.1
 
 # Configure App Icons
 flutter_launcher_icons:
@@ -45,15 +48,15 @@ flutter_launcher_icons:
   min_sdk_android: 21
 
 # Configure Native Splash Screen
-flutter_native_splash:
-  background_image: "assets/images/splash_logo.png"
-  background_image_dark: "assets/images/splash_logo.png"
-  fullscreen: true
-  android_12:
-    image: "assets/images/splash_logo.png"
-    image_dark: "assets/images/splash_logo.png"
-    color: "#FFFFFF"
-    color_dark: "#121212"
+# flutter_native_splash:
+#   background_image: "assets/images/splash_logo.png"
+#   background_image_dark: "assets/images/splash_logo.png"
+#   fullscreen: true
+#   android_12:
+#     image: "assets/images/splash_logo.png"
+#     image_dark: "assets/images/splash_logo.png"
+#     color: "#FFFFFF"
+#     color_dark: "#121212"
 
 dev_dependencies:
   flutter_test:
@@ -80,6 +83,7 @@ flutter:
   assets:
     - assets/images/app_logo.png
     - assets/images/splash_logo.png
+    - .env
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
