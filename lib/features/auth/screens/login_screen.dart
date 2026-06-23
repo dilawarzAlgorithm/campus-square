@@ -33,6 +33,21 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       _showSnackBar(e.toString().replaceAll("Exception: ", ""), isError: true);
+      if (e.toString().contains("Account email is not verified yet.") &&
+          mounted) {
+        String pass = _passwordController.text;
+        _passwordController.text = "";
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => RegisterScreen(
+              otpScreen: true,
+              initialEmail: _emailController.text.trim(),
+              initialPassword: pass,
+            ),
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -40,6 +55,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _showSnackBar(String message, {required bool isError}) {
     if (!mounted) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -136,6 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const Text("New student? "),
                   GestureDetector(
                     onTap: () {
+                      _passwordController.text = "";
                       Navigator.push(
                         context,
                         MaterialPageRoute(

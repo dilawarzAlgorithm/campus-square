@@ -122,6 +122,31 @@ class CampusSquareAuth extends ChangeNotifier {
     }
   }
 
+  Future<bool> resendOtp({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final url = Uri.parse("$baseUrl/api/auth/resend-otp");
+      final response = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"email": email, "password": password}),
+      );
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        return true;
+      } else {
+        throw Exception(
+          data["detail"] ?? "Failed to resend verification code.",
+        );
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   Future<bool> login(String email, String password) async {
     try {
       final url = Uri.parse("$baseUrl/api/auth/login");

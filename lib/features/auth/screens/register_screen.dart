@@ -1,10 +1,19 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});
+  const RegisterScreen({
+    super.key,
+    this.otpScreen = false,
+    this.initialEmail,
+    this.initialPassword,
+  });
+  final bool otpScreen;
+  final String? initialEmail;
+  final String? initialPassword;
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -15,8 +24,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
+  late final TextEditingController _emailController;
+  late final TextEditingController _passwordController;
 
   final _instNameController = TextEditingController();
   final _instShortNameController = TextEditingController();
@@ -25,7 +34,59 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   bool _isLoading = false;
   bool _needsOnboarding = false;
-  bool _otpVerificationStage = false;
+  late bool _otpVerificationStage;
+
+  Timer? _resendTimer;
+  int _resendCountdown = 10;
+  bool _canResendOtp = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _otpVerificationStage = widget.otpScreen;
+    _emailController = TextEditingController(text: widget.initialEmail ?? "");
+    _passwordController = TextEditingController(
+      text: widget.initialPassword ?? "",
+    );
+
+    if (_otpVerificationStage) {
+      _startResendTimer();
+    }
+  }
+
+  @override
+  void dispose() {
+    _resendTimer?.cancel();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _instNameController.dispose();
+    _instShortNameController.dispose();
+    _otpController.dispose();
+    super.dispose();
+  }
+
+  void _startResendTimer() {
+    setState(() {
+      _canResendOtp = false;
+      _resendCountdown = 10;
+    });
+
+    _resendTimer?.cancel();
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_resendCountdown > 0) {
+        setState(() {
+          _resendCountdown--;
+        });
+      } else {
+        timer.cancel();
+        setState(() {
+          _canResendOtp = true;
+        });
+      }
+    });
+  }
 
   void _submitRegistration() async {
     if (!_formKey.currentState!.validate()) return;
@@ -56,6 +117,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         setState(() {
           _otpVerificationStage = true;
         });
+        _startResendTimer();
         _showSnackBar(result.message, isError: false);
       }
     } catch (e) {
@@ -82,6 +144,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
 
       if (success) {
+        _resendTimer?.cancel();
         _showSnackBar(
           "Account verified successfully! Please login.",
           isError: false,
@@ -95,8 +158,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+  void _handleResendOtp() async {
+    if (_passwordController.text.trim().isEmpty) {
+      _showSnackBar(
+        "Session missing password data. Please return to login.",
+        isError: true,
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final success = await context.read<CampusSquareAuth>().resendOtp(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      if (success) {
+        _showSnackBar("Verification code resent successfully!", isError: false);
+        _startResendTimer();
+      }
+    } catch (e) {
+      _showSnackBar(e.toString().replaceAll("Exception: ", ""), isError: true);
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
   void _showSnackBar(String message, {required bool isError}) {
     if (!mounted) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -115,6 +206,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         title: Text(
           _otpVerificationStage ? 'Verify Email' : 'Join Campus Square',
         ),
+        centerTitle: false,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
@@ -198,6 +290,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           'Verify and Proceed',
                           style: TextStyle(fontWeight: FontWeight.bold),
                         ),
+                ),
+                TextButton(
+                  onPressed: _canResendOtp && !_isLoading
+                      ? _handleResendOtp
+                      : null,
+                  child: Text(
+                    _canResendOtp
+                        ? 'Resend Verification Code'
+                        : 'Resend code in $_resendCountdown seconds',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: _canResendOtp
+                          ? theme.colorScheme.primary
+                          : Colors.grey,
+                    ),
+                  ),
                 ),
               ] else ...[
                 Form(
@@ -293,7 +401,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ElevatedButton(
                         onPressed: _isLoading ? null : _submitRegistration,
                         style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 16,
+                            horizontal: 16,
+                          ),
                           backgroundColor: theme.colorScheme.primary,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
