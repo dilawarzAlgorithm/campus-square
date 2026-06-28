@@ -28,10 +28,21 @@ class ApiClient {
     }
 
     http.Response response;
-    if (method.toUpperCase() == "POST") {
-      response = await http.post(url, headers: finalHeaders, body: body);
-    } else {
-      response = await http.get(url, headers: finalHeaders);
+
+    switch (method.toUpperCase()) {
+      case "POST":
+        response = await http.post(url, headers: finalHeaders, body: body);
+        break;
+      case "DELETE":
+        response = await http.delete(url, headers: finalHeaders, body: body);
+        break;
+      case "PUT":
+        response = await http.put(url, headers: finalHeaders, body: body);
+        break;
+      case "GET":
+      default:
+        response = await http.get(url, headers: finalHeaders);
+        break;
     }
 
     if (response.statusCode == 401) {
@@ -42,10 +53,17 @@ class ApiClient {
         final newAccessToken = await _storage.getAccessToken();
         if (newAccessToken != null) {
           finalHeaders["Authorization"] = "Bearer $newAccessToken";
-          if (method.toUpperCase() == "POST") {
-            return await http.post(url, headers: finalHeaders, body: body);
-          } else {
-            return await http.get(url, headers: finalHeaders);
+
+          switch (method.toUpperCase()) {
+            case "POST":
+              return await http.post(url, headers: finalHeaders, body: body);
+            case "DELETE":
+              return await http.delete(url, headers: finalHeaders, body: body);
+            case "PUT":
+              return await http.put(url, headers: finalHeaders, body: body);
+            case "GET":
+            default:
+              return await http.get(url, headers: finalHeaders);
           }
         }
       } else {
