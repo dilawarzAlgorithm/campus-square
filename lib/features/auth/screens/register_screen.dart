@@ -37,7 +37,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   late bool _otpVerificationStage;
 
   Timer? _resendTimer;
-  int _resendCountdown = 10;
+  int _resendCountdown = 30;
   bool _canResendOtp = false;
 
   @override
@@ -70,7 +70,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void _startResendTimer() {
     setState(() {
       _canResendOtp = false;
-      _resendCountdown = 10;
+      _resendCountdown = 30;
     });
 
     _resendTimer?.cancel();
