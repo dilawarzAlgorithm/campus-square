@@ -67,7 +67,7 @@ class ApiClient {
           }
         }
       } else {
-        debugPrint("❌ Refresh token expired. Forcing user logout.");
+        debugPrint("Refresh token expired. Forcing user logout.");
         if (context.mounted) {
           Provider.of<CampusSquareAuth>(
             context,
@@ -104,7 +104,7 @@ class ApiClient {
         return true;
       }
     } catch (e) {
-      debugPrint("❌ Network error during token rotation: $e");
+      debugPrint("Network error during token rotation: $e");
     }
     return false;
   }
