@@ -117,16 +117,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         });
         _showSnackBar(result.message, isError: false);
       } else if (result.success) {
+        setState(() {
+          _otpVerificationStage = true;
+        });
+        _startResendTimer();
         _showSnackBar(result.message, isError: false);
-
-        if (result.message.contains("auto-verified")) {
-          if (mounted) Navigator.pop(context);
-        } else {
-          setState(() {
-            _otpVerificationStage = true;
-          });
-          _startResendTimer();
-        }
       }
     } catch (e) {
       _showSnackBar(e.toString().replaceAll("Exception: ", ""), isError: true);

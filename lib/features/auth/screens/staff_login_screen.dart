@@ -1,17 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
-import 'package:campus_square/features/auth/screens/register_screen.dart';
-import 'package:campus_square/features/auth/screens/staff_login_screen.dart';
 import 'package:provider/provider.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class StaffLoginScreen extends StatefulWidget {
+  const StaffLoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<StaffLoginScreen> createState() => _StaffLoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _StaffLoginScreenState extends State<StaffLoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
@@ -25,30 +23,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
     try {
-      final success = await context.read<CampusSquareAuth>().login(
-        _emailController.text.trim(),
-        _passwordController.text,
-      );
+      final success = false;
       if (!success && mounted) {
         _showSnackBar("Invalid credentials. Try again.", isError: true);
+      } else if (mounted) {
+        Navigator.pop(context);
       }
     } catch (e) {
       _showSnackBar(e.toString().replaceAll("Exception: ", ""), isError: true);
-      if (e.toString().contains("Account email is not verified yet.") &&
-          mounted) {
-        String pass = _passwordController.text;
-        _passwordController.text = "";
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => RegisterScreen(
-              otpScreen: true,
-              initialEmail: _emailController.text.trim(),
-              initialPassword: pass,
-            ),
-          ),
-        );
-      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -71,6 +53,14 @@ class _LoginScreenState extends State<LoginScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -79,22 +69,22 @@ class _LoginScreenState extends State<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Icon(
-                Icons.school_rounded,
+                Icons.admin_panel_settings_rounded,
                 size: 80,
-                color: theme.colorScheme.primary,
+                color: theme.colorScheme.secondary,
               ),
               const SizedBox(height: 16),
               Text(
-                'Campus Square',
+                'Staff & Admin Portal',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
+                  color: theme.colorScheme.secondary,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
-                'Sign in to sync academic records',
+                'Secure access for community heads and administrators.',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
               ),
@@ -103,9 +93,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
                 decoration: const InputDecoration(
-                  labelText: 'Email Address',
+                  labelText: 'Authorized Email / ID',
                   border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.email_outlined),
+                  prefixIcon: Icon(Icons.badge_outlined),
                 ),
               ),
               const SizedBox(height: 16),
@@ -123,7 +113,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 onPressed: _isLoading ? null : _handleLogin,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: theme.colorScheme.primary,
+                  backgroundColor: theme.colorScheme.secondary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -139,53 +129,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       )
                     : const Text(
-                        'Sign In',
+                        'Access Portal',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                         ),
                       ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text("New student? "),
-                  GestureDetector(
-                    onTap: () {
-                      _passwordController.text = "";
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const RegisterScreen(),
-                        ),
-                      );
-                    },
-                    child: Text(
-                      'Create an account',
-                      style: TextStyle(
-                        color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                        decoration: TextDecoration.underline,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              TextButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const StaffLoginScreen(),
-                    ),
-                  );
-                },
-                child: const Text(
-                  'Staff & Admin Login',
-                  style: TextStyle(color: Colors.grey),
-                ),
               ),
             ],
           ),
