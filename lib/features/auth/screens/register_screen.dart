@@ -24,8 +24,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
-  late final TextEditingController _emailController;
-  late final TextEditingController _passwordController;
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
 
   final _instNameController = TextEditingController();
   final _instShortNameController = TextEditingController();
@@ -44,10 +44,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void initState() {
     super.initState();
     _otpVerificationStage = widget.otpScreen;
-    _emailController = TextEditingController(text: widget.initialEmail ?? "");
-    _passwordController = TextEditingController(
-      text: widget.initialPassword ?? "",
-    );
+
+    if (widget.initialEmail != null) {
+      _emailController.text = widget.initialEmail!;
+    }
+    if (widget.initialPassword != null) {
+      _passwordController.text = widget.initialPassword!;
+    }
 
     if (_otpVerificationStage) {
       _startResendTimer();
@@ -114,11 +117,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
         });
         _showSnackBar(result.message, isError: false);
       } else if (result.success) {
-        setState(() {
-          _otpVerificationStage = true;
-        });
-        _startResendTimer();
         _showSnackBar(result.message, isError: false);
+
+        if (result.message.contains("auto-verified")) {
+          if (mounted) Navigator.pop(context);
+        } else {
+          setState(() {
+            _otpVerificationStage = true;
+          });
+          _startResendTimer();
+        }
       }
     } catch (e) {
       _showSnackBar(e.toString().replaceAll("Exception: ", ""), isError: true);
