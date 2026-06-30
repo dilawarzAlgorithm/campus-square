@@ -12,7 +12,11 @@ class StaffLoginScreen extends StatefulWidget {
 class _StaffLoginScreenState extends State<StaffLoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _instNameController = TextEditingController();
+  final _instShortNameController = TextEditingController();
+
   bool _isLoading = false;
+  bool _needsOnboarding = false;
 
   void _handleLogin() async {
     if (_emailController.text.trim().isEmpty ||
@@ -21,10 +25,33 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
       return;
     }
 
+    if (_needsOnboarding &&
+        (_instNameController.text.trim().isEmpty ||
+            _instShortNameController.text.trim().isEmpty)) {
+      _showSnackBar(
+        "Please fill in the required institution details.",
+        isError: true,
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
-      final success = false;
-      if (!success && mounted) {
+      final result = await context.read<CampusSquareAuth>().staffLogin(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+        institutionName: _needsOnboarding
+            ? _instNameController.text.trim()
+            : null,
+        institutionShortName: _needsOnboarding
+            ? _instShortNameController.text.trim()
+            : null,
+      );
+
+      if (result.requiresOnboarding) {
+        setState(() => _needsOnboarding = true);
+        _showSnackBar(result.message, isError: false);
+      } else if (!result.success && mounted) {
         _showSnackBar("Invalid credentials. Try again.", isError: true);
       } else if (mounted) {
         Navigator.pop(context);
@@ -89,25 +116,71 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
                 style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
               ),
               const SizedBox(height: 48),
-              TextField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: 'Authorized Email / ID',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.badge_outlined),
+
+              if (_needsOnboarding) ...[
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.only(bottom: 24),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.secondary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: theme.colorScheme.secondary.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      const Text(
+                        "First Time Staff Setup",
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _instNameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Institution Full Name',
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _instShortNameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Institution Short Name (e.g. MIT)',
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lock_outline),
+              ],
+
+              if (!_needsOnboarding) ...[
+                TextField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Authorized Email / ID',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.badge_outlined),
+                  ),
                 ),
-              ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _passwordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Password',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.lock_outline),
+                  ),
+                ),
+              ],
+
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: _isLoading ? null : _handleLogin,
@@ -128,9 +201,9 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
                           strokeWidth: 2,
                         ),
                       )
-                    : const Text(
-                        'Access Portal',
-                        style: TextStyle(
+                    : Text(
+                        _needsOnboarding ? 'Complete Setup' : 'Access Portal',
+                        style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                         ),
