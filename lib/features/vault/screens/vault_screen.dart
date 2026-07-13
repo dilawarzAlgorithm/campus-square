@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:campus_square/core/network/api_client.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
@@ -270,6 +271,27 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
     }
   }
 
+  Future<void> _openResource(String urlString) async {
+    final Uri url = Uri.parse(urlString);
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        throw Exception("Could not launch $urlString");
+      }
+    } catch (e) {
+      debugPrint("Error opening file: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Unable to open this file."),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -360,6 +382,7 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                         margin: const EdgeInsets.only(bottom: 12),
                         elevation: 1,
                         child: ListTile(
+                          onTap: () => _openResource(item["file_url"]),
                           title: Text(
                             item["title"],
                             style: const TextStyle(fontWeight: FontWeight.bold),
@@ -399,6 +422,13 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                                 color: Colors.red,
                                 onPressed: () =>
                                     _voteResource(item["id"], "DOWNVOTE"),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.open_in_new),
+                                color: Colors.blueGrey,
+                                tooltip: "Open File",
+                                onPressed: () =>
+                                    _openResource(item["file_url"]),
                               ),
                               if (item["uploader_id"] == currentUserId)
                                 IconButton(
@@ -473,7 +503,9 @@ class _UploadResourceScreenState extends State<UploadResourceScreen> {
 
   Future<void> _pickFile() async {
     setState(() => _isPickingFile = true);
+
     FocusManager.instance.primaryFocus?.unfocus();
+
     await Future.delayed(const Duration(milliseconds: 150));
 
     try {
