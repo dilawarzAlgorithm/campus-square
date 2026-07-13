@@ -40,6 +40,7 @@ dependencies:
   http: ^1.6.0
   flutter_dotenv: ^6.0.1
   file_picker: ^8.1.2
+  url_launcher: ^6.3.2
 
 # Configure App Icons
 flutter_launcher_icons:
@@ -47,17 +48,6 @@ flutter_launcher_icons:
   ios: true
   image_path: "assets/images/app_logo.png"
   min_sdk_android: 21
-
-# Configure Native Splash Screen
-# flutter_native_splash:
-#   background_image: "assets/images/splash_logo.png"
-#   background_image_dark: "assets/images/splash_logo.png"
-#   fullscreen: true
-#   android_12:
-#     image: "assets/images/splash_logo.png"
-#     image_dark: "assets/images/splash_logo.png"
-#     color: "#FFFFFF"
-#     color_dark: "#121212"
 
 dev_dependencies:
   flutter_test:
