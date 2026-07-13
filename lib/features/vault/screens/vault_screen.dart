@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:file_picker/file_picker.dart';
 
 import 'package:campus_square/core/network/api_client.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
@@ -68,7 +69,7 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
     } catch (e) {
       debugPrint("Vault fetch error: $e");
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -112,60 +113,6 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
     }
   }
 
-  Future<void> _uploadResource({
-    required String title,
-    required String description,
-    required String fileUrl,
-    required String resourceType,
-    required int semester,
-    required String departmentId,
-  }) async {
-    setState(() => _isLoading = true);
-    try {
-      final payload = {
-        "title": title,
-        "description": description.isNotEmpty ? description : null,
-        "file_url": fileUrl,
-        "resource_type": resourceType,
-        "semester": semester,
-        "department_id": departmentId,
-      };
-
-      final response = await _apiClient.authenticatedRequest(
-        context,
-        "/api/vault/resources",
-        method: "POST",
-        body: jsonEncode(payload),
-      );
-
-      if (response.statusCode == 201) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Resource uploaded successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        if (_selectedDeptId == departmentId) {
-          _fetchResources();
-        }
-      } else {
-        final error = jsonDecode(response.body);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(error['detail'] ?? 'Upload failed'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint("Upload error: $e");
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
   Future<void> _deleteResource(String resourceId) async {
     setState(() => _isLoading = true);
     try {
@@ -197,7 +144,7 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
     } catch (e) {
       debugPrint("Delete error: $e");
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -283,7 +230,9 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                 if (response.statusCode == 201) {
                   _fetchInitialData();
                 }
-              } catch (_) {}
+              } catch (_) {
+                if (mounted) setState(() => _isLoading = false);
+              }
             },
             child: const Text('Create'),
           ),
@@ -292,7 +241,7 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
     );
   }
 
-  void _showUploadResourceDialog() {
+  void _navigateToUploadScreen() async {
     if (_departments.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -303,142 +252,22 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
       return;
     }
 
-    final titleController = TextEditingController();
-    final descController = TextEditingController();
-    final fileUrlController = TextEditingController();
-
-    final List<String> resourceTypes = _resourceTypes.isNotEmpty
-        ? _resourceTypes
-        : ['PYQ', 'NOTE', 'SYLLABUS', 'OTHER'];
-
-    final List<int> semesters = _semesters.isNotEmpty
-        ? _semesters
-        : [1, 2, 3, 4, 5, 6, 7, 8];
-
-    String selectedType = resourceTypes.first;
-    int selectedSemester = semesters.first;
-    String selectedDeptId = _selectedDeptId ?? _departments.first['id'];
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setStateDialog) {
-            return AlertDialog(
-              title: const Text('Upload Resource'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedDeptId,
-                      decoration: const InputDecoration(
-                        labelText: 'Target Department',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: _departments.map<DropdownMenuItem<String>>((dept) {
-                        return DropdownMenuItem<String>(
-                          value: dept['id'],
-                          child: Text("[${dept['code']}] ${dept['name']}"),
-                        );
-                      }).toList(),
-                      onChanged: (val) =>
-                          setStateDialog(() => selectedDeptId = val!),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: titleController,
-                      decoration: const InputDecoration(
-                        labelText: 'Title',
-                        hintText: 'e.g., Data Structures Midsem 2024',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: fileUrlController,
-                      decoration: const InputDecoration(
-                        labelText: 'File URL / Cloud Drive Link',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedType,
-                      decoration: const InputDecoration(
-                        labelText: 'Resource Type',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: resourceTypes.map((type) {
-                        return DropdownMenuItem(value: type, child: Text(type));
-                      }).toList(),
-                      onChanged: (val) =>
-                          setStateDialog(() => selectedType = val!),
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<int>(
-                      initialValue: selectedSemester,
-                      decoration: const InputDecoration(
-                        labelText: 'Semester',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: semesters.map((sem) {
-                        return DropdownMenuItem(
-                          value: sem,
-                          child: Text('Semester $sem'),
-                        );
-                      }).toList(),
-                      onChanged: (val) =>
-                          setStateDialog(() => selectedSemester = val!),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: descController,
-                      maxLines: 2,
-                      decoration: const InputDecoration(
-                        labelText: 'Description (Optional)',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    if (titleController.text.trim().isEmpty ||
-                        fileUrlController.text.trim().isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Title and File URL are required.'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                      return;
-                    }
-                    Navigator.pop(ctx);
-
-                    _uploadResource(
-                      title: titleController.text.trim(),
-                      description: descController.text.trim(),
-                      fileUrl: fileUrlController.text.trim(),
-                      resourceType: selectedType,
-                      semester: selectedSemester,
-                      departmentId: selectedDeptId,
-                    );
-                  },
-                  child: const Text('Upload'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => UploadResourceScreen(
+          apiClient: _apiClient,
+          departments: _departments,
+          resourceTypes: _resourceTypes,
+          semesters: _semesters,
+          initialDeptId: _selectedDeptId ?? _departments.first['id'],
+        ),
+      ),
     );
+
+    if (result == true) {
+      _fetchResources();
+    }
   }
 
   @override
@@ -453,7 +282,7 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
 
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showUploadResourceDialog,
+        onPressed: _navigateToUploadScreen,
         icon: const Icon(Icons.cloud_upload_outlined),
         label: const Text("Upload"),
         backgroundColor: theme.colorScheme.primary,
@@ -586,6 +415,312 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                   ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class UploadResourceScreen extends StatefulWidget {
+  final ApiClient apiClient;
+  final List<dynamic> departments;
+  final List<String> resourceTypes;
+  final List<int> semesters;
+  final String initialDeptId;
+
+  const UploadResourceScreen({
+    super.key,
+    required this.apiClient,
+    required this.departments,
+    required this.resourceTypes,
+    required this.semesters,
+    required this.initialDeptId,
+  });
+
+  @override
+  State<UploadResourceScreen> createState() => _UploadResourceScreenState();
+}
+
+class _UploadResourceScreenState extends State<UploadResourceScreen> {
+  final _titleController = TextEditingController();
+  final _descController = TextEditingController();
+
+  PlatformFile? _selectedFile;
+  bool _isPickingFile = false;
+  bool _isUploading = false;
+
+  late String _selectedType;
+  late int _selectedSemester;
+  late String _selectedDeptId;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDeptId = widget.initialDeptId;
+    _selectedType = widget.resourceTypes.isNotEmpty
+        ? widget.resourceTypes.first
+        : 'NOTE';
+    _selectedSemester = widget.semesters.isNotEmpty
+        ? widget.semesters.first
+        : 1;
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickFile() async {
+    setState(() => _isPickingFile = true);
+    FocusManager.instance.primaryFocus?.unfocus();
+    await Future.delayed(const Duration(milliseconds: 150));
+
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+      );
+
+      if (result != null) {
+        setState(() => _selectedFile = result.files.first);
+      }
+    } catch (e) {
+      debugPrint("File picker error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll("Exception: ", "")),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isPickingFile = false);
+    }
+  }
+
+  Future<void> _submit() async {
+    if (_titleController.text.trim().isEmpty ||
+        _selectedFile == null ||
+        _selectedFile!.path == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Title and a valid file are required.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isUploading = true);
+    try {
+      final uploadResponse = await widget.apiClient
+          .authenticatedMultipartRequest(
+            context,
+            "/api/vault/upload-file",
+            filePath: _selectedFile!.path!,
+            fileField: "file",
+          );
+
+      if (uploadResponse.statusCode != 200) {
+        throw Exception("Failed to upload file to cloud storage.");
+      }
+
+      final uploadData = jsonDecode(uploadResponse.body);
+      final fileUrl = uploadData['file_url'];
+
+      final payload = {
+        "title": _titleController.text.trim(),
+        "description": _descController.text.trim().isNotEmpty
+            ? _descController.text.trim()
+            : null,
+        "file_url": fileUrl,
+        "resource_type": _selectedType,
+        "semester": _selectedSemester,
+        "department_id": _selectedDeptId,
+      };
+
+      if (!mounted) return;
+      final response = await widget.apiClient.authenticatedRequest(
+        context,
+        "/api/vault/resources",
+        method: "POST",
+        body: jsonEncode(payload),
+      );
+
+      if (response.statusCode == 201) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Resource uploaded successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context, true);
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception(error['detail'] ?? 'Upload failed');
+      }
+    } catch (e) {
+      debugPrint("Upload error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll("Exception: ", "")),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final List<int> defaultSemesters = [1, 2, 3, 4, 5, 6, 7, 8];
+    final List<String> defaultTypes = ['PYQ', 'NOTE', 'SYLLABUS', 'OTHER'];
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Upload Resource')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            DropdownButtonFormField<String>(
+              initialValue: _selectedDeptId,
+              decoration: const InputDecoration(
+                labelText: 'Target Department',
+                border: OutlineInputBorder(),
+              ),
+              items: widget.departments.map<DropdownMenuItem<String>>((dept) {
+                return DropdownMenuItem<String>(
+                  value: dept['id'],
+                  child: Text("[${dept['code']}] ${dept['name']}"),
+                );
+              }).toList(),
+              onChanged: (val) => setState(() => _selectedDeptId = val!),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _titleController,
+              decoration: const InputDecoration(
+                labelText: 'Title',
+                hintText: 'e.g., Data Structures Midsem 2024',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            OutlinedButton.icon(
+              icon: _isPickingFile
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.attach_file),
+              label: Text(
+                _selectedFile != null
+                    ? _selectedFile!.name
+                    : (_isPickingFile
+                          ? 'Opening File Explorer...'
+                          : 'Select PDF / Document'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.all(20),
+                alignment: Alignment.centerLeft,
+                side: BorderSide(
+                  color: _selectedFile != null ? Colors.green : Colors.grey,
+                ),
+              ),
+              onPressed: _isPickingFile || _isUploading ? null : _pickFile,
+            ),
+
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _selectedType,
+                    decoration: const InputDecoration(
+                      labelText: 'Resource Type',
+                      border: OutlineInputBorder(),
+                    ),
+                    items:
+                        (widget.resourceTypes.isNotEmpty
+                                ? widget.resourceTypes
+                                : defaultTypes)
+                            .map((type) {
+                              return DropdownMenuItem(
+                                value: type,
+                                child: Text(type),
+                              );
+                            })
+                            .toList(),
+                    onChanged: (val) => setState(() => _selectedType = val!),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: DropdownButtonFormField<int>(
+                    initialValue: _selectedSemester,
+                    decoration: const InputDecoration(
+                      labelText: 'Semester',
+                      border: OutlineInputBorder(),
+                    ),
+                    items:
+                        (widget.semesters.isNotEmpty
+                                ? widget.semesters
+                                : defaultSemesters)
+                            .map((sem) {
+                              return DropdownMenuItem(
+                                value: sem,
+                                child: Text('Sem $sem'),
+                              );
+                            })
+                            .toList(),
+                    onChanged: (val) =>
+                        setState(() => _selectedSemester = val!),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _descController,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Description (Optional)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 32),
+
+            ElevatedButton(
+              onPressed: _isUploading ? null : _submit,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              child: _isUploading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text(
+                      'Upload File',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

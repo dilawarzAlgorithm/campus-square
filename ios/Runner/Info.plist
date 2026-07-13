@@ -70,5 +70,14 @@
 		<true/>
 		<key>UIViewControllerBasedStatusBarAppearance</key>
 		<false/>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>We need access to your photo library to let you upload documents.</string>
+		<key>NSAppleMusicUsageDescription</key>
+		<string>We need access to your media files to let you upload documents.</string>
+		<key>UIBackgroundModes</key>
+		<array>
+			<string>fetch</string>
+			<string>remote-notification</string>
+		</array>
 	</dict>
 </plist>

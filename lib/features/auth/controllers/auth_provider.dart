@@ -79,8 +79,8 @@ class CampusSquareAuth extends ChangeNotifier {
         "first_name": firstName,
         "last_name": lastName,
         "requested_role": "STUDENT",
-        "institution_name": ?institutionName,
-        "institution_short_name": ?institutionShortName,
+        "institution_name": institutionName,
+        "institution_short_name": institutionShortName,
       };
 
       final response = await http.post(
@@ -200,8 +200,8 @@ class CampusSquareAuth extends ChangeNotifier {
       final bodyMap = {
         "email": email,
         "password": password,
-        "institution_name": ?institutionName,
-        "institution_short_name": ?institutionShortName,
+        "institution_name": institutionName,
+        "institution_short_name": institutionShortName,
       };
 
       final response = await http.post(

@@ -80,6 +80,53 @@ class ApiClient {
     return response;
   }
 
+  Future<http.Response> authenticatedMultipartRequest(
+    BuildContext context,
+    String path, {
+    required String filePath,
+    required String fileField,
+  }) async {
+    final url = Uri.parse("$baseUrl$path");
+    final accessToken = await _storage.getAccessToken();
+
+    var request = http.MultipartRequest('POST', url);
+    if (accessToken != null) {
+      request.headers["Authorization"] = "Bearer $accessToken";
+    }
+
+    request.files.add(await http.MultipartFile.fromPath(fileField, filePath));
+
+    var streamedResponse = await request.send();
+    var response = await http.Response.fromStream(streamedResponse);
+
+    if (response.statusCode == 401) {
+      debugPrint("⏳ Access token expired during upload. Rotating...");
+      final refreshSuccess = await _rotateTokens();
+
+      if (refreshSuccess) {
+        final newAccessToken = await _storage.getAccessToken();
+        if (newAccessToken != null) {
+          var newRequest = http.MultipartRequest('POST', url);
+          newRequest.headers["Authorization"] = "Bearer $newAccessToken";
+          newRequest.files.add(
+            await http.MultipartFile.fromPath(fileField, filePath),
+          );
+
+          var newStreamed = await newRequest.send();
+          return await http.Response.fromStream(newStreamed);
+        }
+      } else {
+        if (context.mounted) {
+          Provider.of<CampusSquareAuth>(
+            context,
+            listen: false,
+          ).logoutForcefully();
+        }
+      }
+    }
+    return response;
+  }
+
   Future<bool> _rotateTokens() async {
     final refreshToken = await _storage.getRefreshToken();
     if (refreshToken == null) return false;
