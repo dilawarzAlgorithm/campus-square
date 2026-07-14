@@ -21,7 +21,12 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
   List<String> _resourceTypes = [];
   List<int> _semesters = [];
   bool _isLoading = true;
+
   String? _selectedDeptId;
+
+  String? _filterType;
+  int? _filterSemester;
+  String _sortBy = "upvotes"; // "upvotes" or "newest"
 
   @override
   void initState() {
@@ -75,10 +80,16 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
   }
 
   Future<void> _fetchResources() async {
-    String query = "";
+    List<String> queryParams = [];
+
     if (_selectedDeptId != null) {
-      query = "?department_id=$_selectedDeptId";
+      queryParams.add("department_id=$_selectedDeptId");
     }
+    if (_filterSemester != null) queryParams.add("semester=$_filterSemester");
+    if (_filterType != null) queryParams.add("resource_type=$_filterType");
+    queryParams.add("sort_by=$_sortBy");
+
+    String query = queryParams.isNotEmpty ? "?${queryParams.join('&')}" : "";
 
     try {
       final resResponse = await _apiClient.authenticatedRequest(
@@ -88,9 +99,11 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
       );
 
       if (resResponse.statusCode == 200) {
-        setState(() {
-          _resources = jsonDecode(resResponse.body);
-        });
+        if (mounted) {
+          setState(() {
+            _resources = jsonDecode(resResponse.body);
+          });
+        }
       }
     } catch (e) {
       debugPrint("Error fetching resources: $e");
@@ -274,17 +287,24 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
   Future<void> _openResource(String urlString) async {
     final Uri url = Uri.parse(urlString);
     try {
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      } else {
-        throw Exception("Could not launch $urlString");
+      bool launched = await launchUrl(
+        url,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) {
+        launched = await launchUrl(url, mode: LaunchMode.platformDefault);
+        if (!launched) {
+          throw Exception("Could not launch $urlString");
+        }
       }
     } catch (e) {
       debugPrint("Error opening file: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("Unable to open this file."),
+            content: Text(
+              "Unable to open this file. Please check your browser.",
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -292,15 +312,155 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
     }
   }
 
+  void _showFilterSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Sort & Filter',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    const Text(
+                      'Sort By',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(
+                          value: 'upvotes',
+                          label: Text('Top Voted'),
+                          icon: Icon(Icons.thumb_up_alt_outlined),
+                        ),
+                        ButtonSegment(
+                          value: 'newest',
+                          label: Text('Newest'),
+                          icon: Icon(Icons.access_time),
+                        ),
+                      ],
+                      selected: {_sortBy},
+                      onSelectionChanged: (Set<String> newSelection) {
+                        setModalState(() => _sortBy = newSelection.first);
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<int?>(
+                            initialValue: _filterSemester,
+                            decoration: const InputDecoration(
+                              labelText: 'Semester',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: [
+                              const DropdownMenuItem(
+                                value: null,
+                                child: Text('All Semesters'),
+                              ),
+                              ..._semesters.map(
+                                (sem) => DropdownMenuItem(
+                                  value: sem,
+                                  child: Text('Sem $sem'),
+                                ),
+                              ),
+                            ],
+                            onChanged: (val) =>
+                                setModalState(() => _filterSemester = val),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: DropdownButtonFormField<String?>(
+                            initialValue: _filterType,
+                            decoration: const InputDecoration(
+                              labelText: 'Type',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: [
+                              const DropdownMenuItem(
+                                value: null,
+                                child: Text('All Types'),
+                              ),
+                              ..._resourceTypes.map(
+                                (type) => DropdownMenuItem(
+                                  value: type,
+                                  child: Text(type),
+                                ),
+                              ),
+                            ],
+                            onChanged: (val) =>
+                                setModalState(() => _filterType = val),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () {
+                              setModalState(() {
+                                _filterSemester = null;
+                                _filterType = null;
+                                _sortBy = 'upvotes';
+                              });
+                            },
+                            child: const Text('Reset'),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              setState(() => _isLoading = true);
+                              _fetchResources().then(
+                                (_) => setState(() => _isLoading = false),
+                              );
+                            },
+                            child: const Text('Apply Filters'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final currentUser = context.read<CampusSquareAuth>().user;
     final currentUserId = currentUser?['id'];
-
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
 
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
@@ -314,7 +474,7 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             color: theme.cardColor,
             child: Row(
               children: [
@@ -341,8 +501,11 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                           onChanged: (val) {
                             setState(() {
                               _selectedDeptId = val;
+                              _isLoading = true;
                             });
-                            _fetchResources();
+                            _fetchResources().then(
+                              (_) => setState(() => _isLoading = false),
+                            );
                           },
                         ),
                 ),
@@ -355,8 +518,36 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
             ),
           ),
 
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: theme.cardColor,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${_resources.length} Resources Found',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.grey,
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _showFilterSheet,
+                  icon: const Icon(Icons.filter_list, size: 18),
+                  label: const Text("Sort & Filter"),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, thickness: 1),
+
           Expanded(
-            child: _resources.isEmpty
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _resources.isEmpty
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -368,80 +559,143 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'No learning documents uploaded to this department.',
+                          'No learning documents match your criteria.',
                         ),
                       ],
                     ),
                   )
-                : ListView.builder(
-                    itemCount: _resources.length,
-                    padding: const EdgeInsets.all(16),
-                    itemBuilder: (context, index) {
-                      final item = _resources[index];
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        elevation: 1,
-                        child: ListTile(
-                          onTap: () => _openResource(item["file_url"]),
-                          title: Text(
-                            item["title"],
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                : RefreshIndicator(
+                    onRefresh: _fetchResources,
+                    child: ListView.builder(
+                      itemCount: _resources.length,
+                      padding: const EdgeInsets.all(16),
+                      itemBuilder: (context, index) {
+                        final item = _resources[index];
+
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          elevation: 1,
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            onTap: () => _openResource(item["file_url"]),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          item["title"],
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                        if (item["description"] != null) ...[
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            item["description"],
+                                            style: const TextStyle(
+                                              color: Colors.black87,
+                                            ),
+                                          ),
+                                        ],
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            Chip(
+                                              label: Text(
+                                                item["resource_type"],
+                                                style: const TextStyle(
+                                                  fontSize: 10,
+                                                ),
+                                              ),
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'Sem ${item["semester"]}',
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          GestureDetector(
+                                            onTap: () => _voteResource(
+                                              item["id"],
+                                              "UPVOTE",
+                                            ),
+                                            child: Icon(
+                                              Icons.keyboard_arrow_up,
+                                              color: theme.colorScheme.primary,
+                                              size: 28,
+                                            ),
+                                          ),
+                                          Text(
+                                            '${item["upvote_count"] - item["downvote_count"]}',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                          GestureDetector(
+                                            onTap: () => _voteResource(
+                                              item["id"],
+                                              "DOWNVOTE",
+                                            ),
+                                            child: const Icon(
+                                              Icons.keyboard_arrow_down,
+                                              color: Colors.red,
+                                              size: 28,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(width: 4),
+                                      IconButton(
+                                        icon: const Icon(Icons.open_in_new),
+                                        color: Colors.blueGrey,
+                                        tooltip: "Open File",
+                                        onPressed: () =>
+                                            _openResource(item["file_url"]),
+                                      ),
+                                      if (item["uploader_id"] == currentUserId)
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.delete_outline,
+                                          ),
+                                          color: Colors.grey,
+                                          onPressed: () =>
+                                              _confirmDeleteResource(
+                                                item["id"],
+                                              ),
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 4),
-                              Text(
-                                item["description"] ??
-                                    "No description provided.",
-                              ),
-                              const SizedBox(height: 4),
-                              Chip(
-                                label: Text(
-                                  item["resource_type"],
-                                  style: const TextStyle(fontSize: 10),
-                                ),
-                                visualDensity: VisualDensity.compact,
-                              ),
-                            ],
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.arrow_upward),
-                                color: theme.colorScheme.primary,
-                                onPressed: () =>
-                                    _voteResource(item["id"], "UPVOTE"),
-                              ),
-                              Text(
-                                '${item["upvote_count"] - item["downvote_count"]}',
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.arrow_downward),
-                                color: Colors.red,
-                                onPressed: () =>
-                                    _voteResource(item["id"], "DOWNVOTE"),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.open_in_new),
-                                color: Colors.blueGrey,
-                                tooltip: "Open File",
-                                onPressed: () =>
-                                    _openResource(item["file_url"]),
-                              ),
-                              if (item["uploader_id"] == currentUserId)
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline),
-                                  color: Colors.grey,
-                                  onPressed: () =>
-                                      _confirmDeleteResource(item["id"]),
-                                ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
           ),
         ],
