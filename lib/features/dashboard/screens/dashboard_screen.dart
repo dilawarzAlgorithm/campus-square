@@ -18,7 +18,7 @@ class _DashboardState extends State<Dashboard> {
     const Center(child: Text('Square: Notices & Hub')),
     const Center(child: Text('Bazaar: Marketplace')),
     const AcademicVaultScreen(),
-    const _ProfileTab(),
+    const ProfileTab(),
   ];
 
   @override
@@ -66,8 +66,8 @@ class _DashboardState extends State<Dashboard> {
   }
 }
 
-class _ProfileTab extends StatelessWidget {
-  const _ProfileTab();
+class ProfileTab extends StatelessWidget {
+  const ProfileTab({super.key});
 
   @override
   Widget build(BuildContext context) {
