@@ -284,13 +284,87 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
     }
   }
 
-  Future<void> _openResource(String urlString) async {
-    final Uri url = Uri.parse(urlString);
-    try {
-      bool launched = await launchUrl(
-        url,
-        mode: LaunchMode.externalApplication,
+  void _handlePreview(Map<String, dynamic> item) {
+    final String urlString = item["file_url"] ?? "";
+    final String lowerUrl = urlString.toLowerCase();
+
+    if (lowerUrl.endsWith(".png") ||
+        lowerUrl.endsWith(".jpg") ||
+        lowerUrl.endsWith(".jpeg") ||
+        lowerUrl.endsWith(".gif")) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(
+            item["title"],
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(ctx).size.height * 0.4,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    urlString,
+                    fit: BoxFit.contain,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return const Padding(
+                        padding: EdgeInsets.all(32.0),
+                        child: CircularProgressIndicator(),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) =>
+                        const Text("Failed to load image preview."),
+                  ),
+                ),
+              ),
+              if (item["description"] != null) ...[
+                const SizedBox(height: 12),
+                Text(item["description"], style: const TextStyle(fontSize: 14)),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _openResource(urlString, inAppPreview: false);
+              },
+              icon: const Icon(Icons.open_in_new, size: 16),
+              label: const Text('Open Externally'),
+            ),
+          ],
+        ),
       );
+    } else {
+      _openResource(urlString, inAppPreview: true);
+    }
+  }
+
+  Future<void> _openResource(
+    String urlString, {
+    bool inAppPreview = false,
+  }) async {
+    Uri url = Uri.parse(urlString);
+    LaunchMode mode = LaunchMode.externalApplication;
+
+    if (inAppPreview) {
+      mode = LaunchMode.inAppBrowserView;
+    }
+
+    try {
+      bool launched = await launchUrl(url, mode: mode);
+
       if (!launched) {
         launched = await launchUrl(url, mode: LaunchMode.platformDefault);
         if (!launched) {
@@ -577,7 +651,7 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                           elevation: 1,
                           clipBehavior: Clip.antiAlias,
                           child: InkWell(
-                            onTap: () => _openResource(item["file_url"]),
+                            onTap: () => _handlePreview(item),
                             child: Padding(
                               padding: const EdgeInsets.all(16.0),
                               child: Row(
@@ -672,9 +746,11 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                                       IconButton(
                                         icon: const Icon(Icons.open_in_new),
                                         color: Colors.blueGrey,
-                                        tooltip: "Open File",
-                                        onPressed: () =>
-                                            _openResource(item["file_url"]),
+                                        tooltip: "Open Externally",
+                                        onPressed: () => _openResource(
+                                          item["file_url"],
+                                          inAppPreview: false,
+                                        ),
                                       ),
                                       if (item["uploader_id"] == currentUserId)
                                         IconButton(
