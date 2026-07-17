@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:campus_square/features/vault/screens/vault_screen.dart';
 import 'package:campus_square/features/dashboard/screens/dashboard_screen.dart';
+import 'package:campus_square/features/community/screens/member_management_screen.dart';
 
 class CommunityHeadDashboardScreen extends StatefulWidget {
   const CommunityHeadDashboardScreen({super.key});
@@ -160,7 +161,14 @@ class _CommunityPanelTab extends StatelessWidget {
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.chevron_right, color: Colors.grey),
         onTap: () {
-          // TODO: Navigate to specific management screens
+          if (title == 'Member List' || title == 'Promote Captains') {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const MemberManagementScreen(),
+              ),
+            );
+          }
         },
       ),
     );
