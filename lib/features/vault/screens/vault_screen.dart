@@ -534,6 +534,7 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final currentUser = context.read<CampusSquareAuth>().user;
+    final userRole = currentUser?['role'] ?? 'STUDENT';
     final currentUserId = currentUser?['id'];
 
     return Scaffold(
@@ -645,6 +646,10 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                       padding: const EdgeInsets.all(16),
                       itemBuilder: (context, index) {
                         final item = _resources[index];
+                        final isOwner = item['uploader_id'] == currentUserId;
+                        final isStaff =
+                            userRole == 'COMMUNITY_HEAD' || userRole == 'ADMIN';
+                        final canDelete = isOwner || isStaff;
 
                         return Card(
                           margin: const EdgeInsets.only(bottom: 12),
@@ -752,7 +757,7 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                                           inAppPreview: false,
                                         ),
                                       ),
-                                      if (item["uploader_id"] == currentUserId)
+                                      if (canDelete)
                                         IconButton(
                                           icon: const Icon(
                                             Icons.delete_outline,
