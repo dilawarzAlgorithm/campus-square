@@ -39,10 +39,42 @@ class ApiClient {
       case "PUT":
         response = await http.put(url, headers: finalHeaders, body: body);
         break;
+      case "PATCH":
+        response = await http.patch(url, headers: finalHeaders, body: body);
+        break;
       case "GET":
       default:
         response = await http.get(url, headers: finalHeaders);
         break;
+    }
+
+    if (response.statusCode == 403) {
+      try {
+        final responseBody = jsonDecode(response.body);
+        final detail = responseBody['detail']?.toString().toLowerCase() ?? '';
+
+        if (detail.contains('suspended') || detail.contains('blocked')) {
+          debugPrint("Account suspended. Forcing logout.");
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Your account has been suspended by a Community Head.',
+                ),
+                backgroundColor: Colors.red,
+                duration: Duration(seconds: 4),
+              ),
+            );
+            Provider.of<CampusSquareAuth>(
+              context,
+              listen: false,
+            ).logoutForcefully();
+          }
+        }
+      } catch (e) {
+        debugPrint("Could not parse 403 body: $e");
+      }
+      return response;
     }
 
     if (response.statusCode == 401) {
@@ -61,6 +93,8 @@ class ApiClient {
               return await http.delete(url, headers: finalHeaders, body: body);
             case "PUT":
               return await http.put(url, headers: finalHeaders, body: body);
+            case "PATCH":
+              return await http.patch(url, headers: finalHeaders, body: body);
             case "GET":
             default:
               return await http.get(url, headers: finalHeaders);
