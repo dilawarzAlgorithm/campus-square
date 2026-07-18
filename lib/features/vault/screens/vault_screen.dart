@@ -21,6 +21,7 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
   List<String> _resourceTypes = [];
   List<int> _semesters = [];
   bool _isLoading = true;
+  Set<String> _savedResourceIds = {};
 
   String? _selectedDeptId;
 
@@ -69,6 +70,18 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
 
         final semMap = decodedEnums["Semester"]["values"] as Map;
         _semesters = semMap.values.map((e) => int.parse(e.toString())).toList();
+      }
+
+      if (!mounted) return;
+
+      final savedResponse = await _apiClient.authenticatedRequest(
+        context,
+        "/api/vault/saved-resource-ids",
+        method: "GET",
+      );
+      if (savedResponse.statusCode == 200) {
+        final List<dynamic> savedIds = jsonDecode(savedResponse.body);
+        _savedResourceIds = savedIds.map((e) => e.toString()).toSet();
       }
 
       await _fetchResources();
@@ -121,9 +134,50 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
 
       if (response.statusCode == 200) {
         _fetchResources();
+        if (mounted) {
+          context.read<CampusSquareAuth>().refreshProfile();
+        }
       }
     } catch (e) {
       debugPrint("Voting error: $e");
+    }
+  }
+
+  Future<void> _toggleSaveResource(String resourceId) async {
+    final isSaved = _savedResourceIds.contains(resourceId);
+    setState(() {
+      if (isSaved) {
+        _savedResourceIds.remove(resourceId);
+      } else {
+        _savedResourceIds.add(resourceId);
+      }
+    });
+
+    try {
+      final response = await _apiClient.authenticatedRequest(
+        context,
+        "/api/vault/resources/$resourceId/save",
+        method: "POST",
+      );
+
+      if (response.statusCode != 200) {
+        setState(() {
+          if (isSaved) {
+            _savedResourceIds.add(resourceId);
+          } else {
+            _savedResourceIds.remove(resourceId);
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Toggle save error: $e");
+      setState(() {
+        if (isSaved) {
+          _savedResourceIds.add(resourceId);
+        } else {
+          _savedResourceIds.remove(resourceId);
+        }
+      });
     }
   }
 
@@ -749,6 +803,22 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                                       ),
                                       const SizedBox(width: 4),
                                       IconButton(
+                                        icon: Icon(
+                                          _savedResourceIds.contains(item["id"])
+                                              ? Icons.bookmark
+                                              : Icons.bookmark_border,
+                                          color:
+                                              _savedResourceIds.contains(
+                                                item["id"],
+                                              )
+                                              ? theme.colorScheme.primary
+                                              : Colors.grey,
+                                        ),
+                                        tooltip: "Save Resource",
+                                        onPressed: () =>
+                                            _toggleSaveResource(item["id"]),
+                                      ),
+                                      IconButton(
                                         icon: const Icon(Icons.open_in_new),
                                         color: Colors.blueGrey,
                                         tooltip: "Open Externally",
@@ -917,6 +987,7 @@ class _UploadResourceScreenState extends State<UploadResourceScreen> {
 
       if (response.statusCode == 201) {
         if (!mounted) return;
+        context.read<CampusSquareAuth>().refreshProfile();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Resource uploaded successfully!'),

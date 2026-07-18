@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:campus_square/features/vault/screens/vault_screen.dart';
-import 'package:campus_square/features/dashboard/screens/dashboard_screen.dart';
+import 'package:campus_square/features/profile/screen/profile_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -17,7 +17,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     const Center(child: Text('Bazaar: Marketplace')),
     const AcademicVaultScreen(),
     const _AdminPanelTab(),
-    const ProfileTab(),
+    const ProfileScreen(),
   ];
 
   @override

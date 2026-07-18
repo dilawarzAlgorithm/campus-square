@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:campus_square/features/vault/screens/vault_screen.dart';
-import 'package:campus_square/features/dashboard/screens/dashboard_screen.dart';
+import 'package:campus_square/features/profile/screen/profile_screen.dart';
 import 'package:campus_square/features/community/screens/member_management_screen.dart';
 
 class CommunityHeadDashboardScreen extends StatefulWidget {
@@ -20,7 +20,7 @@ class _CommunityHeadDashboardScreenState
     const Center(child: Text('Bazaar: Marketplace')),
     const AcademicVaultScreen(),
     const _CommunityPanelTab(),
-    const ProfileTab(),
+    const ProfileScreen(),
   ];
 
   @override

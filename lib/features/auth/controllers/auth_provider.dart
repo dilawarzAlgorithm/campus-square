@@ -260,6 +260,52 @@ class CampusSquareAuth extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> refreshProfile() async {
+    try {
+      final accessToken = await _storage.getAccessToken();
+      if (accessToken == null) return;
+
+      final response = await http.get(
+        Uri.parse("$baseUrl/api/auth/me"),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $accessToken",
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        await updateUserProfileLocally(data);
+      }
+    } catch (e) {
+      debugPrint("Error refreshing profile: $e");
+    }
+  }
+
+  Future<bool> updateName(String firstName, String lastName) async {
+    try {
+      final accessToken = await _storage.getAccessToken();
+      final response = await http.patch(
+        Uri.parse("$baseUrl/api/auth/name"),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $accessToken",
+        },
+        body: jsonEncode({"first_name": firstName, "last_name": lastName}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        await updateUserProfileLocally(data);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint("Error updating name: $e");
+      return false;
+    }
+  }
+
   Future<void> logout() async {
     await _storage.clearSession();
     _user = null;
