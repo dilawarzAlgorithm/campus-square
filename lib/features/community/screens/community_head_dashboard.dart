@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:campus_square/features/vault/screens/vault_screen.dart';
-import 'package:campus_square/features/profile/screen/profile_screen.dart';
+import 'package:campus_square/features/profile/screens/profile_screen.dart';
+import 'package:campus_square/features/square/screens/square_screen.dart';
 import 'package:campus_square/features/community/screens/member_management_screen.dart';
 
 class CommunityHeadDashboardScreen extends StatefulWidget {
@@ -16,7 +17,7 @@ class _CommunityHeadDashboardScreenState
   int _currentIndex = 0;
 
   final List<Widget> _screens = [
-    const Center(child: Text('Square: Community Notices')),
+    const SquareScreen(),
     const Center(child: Text('Bazaar: Marketplace')),
     const AcademicVaultScreen(),
     const _CommunityPanelTab(),

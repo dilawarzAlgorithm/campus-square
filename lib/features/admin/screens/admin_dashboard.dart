@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:campus_square/features/vault/screens/vault_screen.dart';
-import 'package:campus_square/features/profile/screen/profile_screen.dart';
+import 'package:campus_square/features/profile/screens/profile_screen.dart';
+import 'package:campus_square/features/square/screens/square_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -13,7 +14,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   int _currentIndex = 0;
 
   final List<Widget> _screens = [
-    const Center(child: Text('Square: Staff Notices')),
+    const SquareScreen(),
     const Center(child: Text('Bazaar: Marketplace')),
     const AcademicVaultScreen(),
     const _AdminPanelTab(),
