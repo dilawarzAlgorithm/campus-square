@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -18,7 +19,6 @@ class _SquareScreenState extends State<SquareScreen> {
   bool _isLoading = true;
   List<dynamic> _posts = [];
 
-  // null = 'All'
   String? _selectedCategory;
 
   final Map<String, String> _categories = {
@@ -98,146 +98,641 @@ class _SquareScreenState extends State<SquareScreen> {
     }
   }
 
+  String _formatShortTime(String isoString) {
+    try {
+      final date = DateTime.parse(isoString).toLocal();
+      final now = DateTime.now();
+      final difference = now.difference(date);
+
+      if (difference.inDays > 0) return '${difference.inDays}d';
+      if (difference.inHours > 0) return '${difference.inHours}h';
+      if (difference.inMinutes > 0) return '${difference.inMinutes}m';
+      return 'now';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  List<Map<String, dynamic>> _flattenComments(
+    List<dynamic> comments, {
+    int depth = 0,
+  }) {
+    List<Map<String, dynamic>> result = [];
+    for (var comment in comments) {
+      result.add({'comment': comment, 'depth': depth});
+      if (comment['replies'] != null &&
+          (comment['replies'] as List).isNotEmpty) {
+        result.addAll(_flattenComments(comment['replies'], depth: depth + 1));
+      }
+    }
+    return result;
+  }
+
   void _showCommentsSheet(Map<String, dynamic> post) {
     final commentController = TextEditingController();
+    final FocusNode commentFocusNode = FocusNode();
     bool isSubmitting = false;
+    bool isInputEmpty = true;
+
+    String? replyingToId;
+    String? replyingToName;
+
+    final ScrollController listScrollController = ScrollController();
+
+    final currentUser = context.read<CampusSquareAuth>().user;
+    final currentUserId = currentUser?['id'];
+    final userRole = currentUser?['role'] ?? 'STUDENT';
+    final isStaff = userRole == 'ADMIN' || userRole == 'COMMUNITY_HEAD';
+    final theme = Theme.of(context);
+
+    List<dynamic> mutableComments = List.from(
+      (post['comments'] as List<dynamic>? ?? []).where(
+        (c) => c['parent_id'] == null,
+      ),
+    );
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            final comments = post['comments'] as List<dynamic>? ?? [];
+            final flatComments = _flattenComments(mutableComments);
 
             return Padding(
               padding: EdgeInsets.only(
                 bottom: MediaQuery.of(context).viewInsets.bottom,
-                top: 16,
-                left: 16,
-                right: 16,
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Comments',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 16),
-                  ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: MediaQuery.of(context).size.height * 0.4,
-                    ),
-                    child: comments.isEmpty
-                        ? const Padding(
-                            padding: EdgeInsets.all(16.0),
-                            child: Text("No comments yet. Be the first!"),
-                          )
-                        : ListView.builder(
-                            shrinkWrap: true,
-                            itemCount: comments.length,
-                            itemBuilder: (context, index) {
-                              final c = comments[index];
-                              final isStaffComment =
-                                  c['author']['role'] == 'ADMIN' ||
-                                  c['author']['role'] == 'COMMUNITY_HEAD';
-                              return ListTile(
-                                leading: CircleAvatar(
-                                  child: Text(c['author']['first_name'][0]),
-                                ),
-                                title: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Flexible(
-                                      child: Text(
-                                        "${c['author']['first_name']} ${c['author']['last_name']}",
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    if (isStaffComment) ...[
-                                      const SizedBox(width: 4),
-                                      const Icon(
-                                        Icons.verified,
-                                        color: Colors.blue,
-                                        size: 14,
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                                subtitle: Text(c['text']),
-                              );
-                            },
+              child: Container(
+                height: MediaQuery.of(context).size.height * 0.9,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      child: Row(
+                        children: [
+                          Text(
+                            "${flatComments.length} Comments",
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                  ),
-                  const Divider(),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: commentController,
-                          decoration: const InputDecoration(
-                            hintText: 'Write a comment...',
-                            border: InputBorder.none,
+                          const Spacer(),
+                          IconButton(
+                            icon: const Icon(Icons.close, color: Colors.grey),
+                            onPressed: () => Navigator.pop(ctx),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+
+                    Expanded(
+                      child: flatComments.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Text(
+                                    "💬",
+                                    style: TextStyle(fontSize: 48),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  const Text(
+                                    "No comments yet",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    "Start the conversation.",
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : ListView.builder(
+                              controller: listScrollController,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              itemCount: flatComments.length,
+                              itemBuilder: (context, index) {
+                                final item = flatComments[index];
+                                final c = item['comment'];
+                                final depth = item['depth'] as int;
+
+                                final isStaffComment =
+                                    c['author']['role'] == 'ADMIN' ||
+                                    c['author']['role'] == 'COMMUNITY_HEAD';
+                                final isCommentOwner =
+                                    c['author']['id'] == currentUserId;
+                                final canDeleteComment =
+                                    isCommentOwner || isStaff;
+
+                                return InkWell(
+                                  onLongPress: () {
+                                    _showCommentActions(
+                                      context,
+                                      c,
+                                      setModalState,
+                                      post['id'],
+                                    );
+                                  },
+                                  child: Padding(
+                                    padding: EdgeInsets.only(
+                                      left: 16.0 + (depth * 32.0),
+                                      right: 16.0,
+                                      top: depth == 0 ? 12.0 : 6.0,
+                                      bottom: depth == 0 ? 12.0 : 6.0,
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        CircleAvatar(
+                                          radius: depth == 0 ? 18 : 14,
+                                          backgroundColor: theme
+                                              .colorScheme
+                                              .primary
+                                              .withValues(alpha: 0.1),
+                                          child: Text(
+                                            c['author']['first_name'][0]
+                                                .toUpperCase(),
+                                            style: TextStyle(
+                                              fontSize: depth == 0 ? 14 : 12,
+                                              color: theme.colorScheme.primary,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Flexible(
+                                                    child: Text(
+                                                      "${c['author']['first_name']} ${c['author']['last_name']}",
+                                                      style: const TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 13,
+                                                      ),
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
+                                                  if (isStaffComment)
+                                                    const Padding(
+                                                      padding: EdgeInsets.only(
+                                                        left: 4,
+                                                      ),
+                                                      child: Icon(
+                                                        Icons.verified,
+                                                        color: Colors.blue,
+                                                        size: 14,
+                                                      ),
+                                                    ),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    _formatShortTime(
+                                                      c['created_at'],
+                                                    ),
+                                                    style: TextStyle(
+                                                      color:
+                                                          Colors.grey.shade500,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                c['text'],
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                  height: 1.3,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Row(
+                                                children: [
+                                                  InkWell(
+                                                    onTap: () {
+                                                      setModalState(() {
+                                                        replyingToId = c['id'];
+                                                        replyingToName =
+                                                            "${c['author']['first_name']} ${c['author']['last_name']}";
+                                                      });
+                                                      commentFocusNode
+                                                          .requestFocus();
+                                                    },
+                                                    child: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        Icon(
+                                                          Icons.reply_rounded,
+                                                          size: 14,
+                                                          color: Colors
+                                                              .grey
+                                                              .shade600,
+                                                        ),
+                                                        const SizedBox(
+                                                          width: 4,
+                                                        ),
+                                                        Text(
+                                                          "Reply",
+                                                          style: TextStyle(
+                                                            fontSize: 12,
+                                                            color: Colors
+                                                                .grey
+                                                                .shade600,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  if (canDeleteComment) ...[
+                                                    const SizedBox(width: 16),
+                                                    InkWell(
+                                                      onTap: () =>
+                                                          _confirmDeleteComment(
+                                                            context,
+                                                            c,
+                                                            setModalState,
+                                                            post['id'],
+                                                          ),
+                                                      child: Text(
+                                                        "Delete",
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                          color: Colors
+                                                              .red
+                                                              .shade300,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+
+                    if (replyingToId != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          border: Border(
+                            top: BorderSide(color: Colors.grey.shade300),
                           ),
                         ),
+                        child: Row(
+                          children: [
+                            Text(
+                              "Replying to ",
+                              style: TextStyle(
+                                color: Colors.grey.shade700,
+                                fontSize: 12,
+                              ),
+                            ),
+                            Text(
+                              replyingToName ?? "",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const Spacer(),
+                            InkWell(
+                              onTap: () => setModalState(() {
+                                replyingToId = null;
+                                replyingToName = null;
+                              }),
+                              child: const Icon(
+                                Icons.close,
+                                size: 16,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      IconButton(
-                        icon: isSubmitting
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+
+                    SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: commentController,
+                                focusNode: commentFocusNode,
+                                minLines: 1,
+                                maxLines: 4,
+                                onChanged: (val) => setModalState(
+                                  () => isInputEmpty = val.trim().isEmpty,
                                 ),
-                              )
-                            : const Icon(Icons.send, color: Colors.blue),
-                        onPressed: isSubmitting
-                            ? null
-                            : () async {
-                                if (commentController.text.trim().isEmpty) {
-                                  return;
-                                }
-                                setModalState(() => isSubmitting = true);
-                                try {
-                                  final response = await _apiClient
-                                      .authenticatedRequest(
-                                        context,
-                                        "/api/square/notices/${post['id']}/comments",
-                                        method: "POST",
-                                        body: jsonEncode({
-                                          "text": commentController.text.trim(),
-                                        }),
-                                      );
-                                  if (!context.mounted) return;
-                                  if (response.statusCode == 201) {
-                                    commentController.clear();
-                                    _fetchPosts();
-                                    Navigator.pop(ctx);
-                                  }
-                                } catch (e) {
-                                  debugPrint("Comment error: $e");
-                                } finally {
-                                  setModalState(() => isSubmitting = false);
-                                }
-                              },
+                                decoration: InputDecoration(
+                                  hintText: replyingToId != null
+                                      ? 'Write a reply...'
+                                      : 'Write a comment...',
+                                  filled: true,
+                                  fillColor: Colors.grey.shade100,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 10,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 2),
+                              child: isSubmitting
+                                  ? const SizedBox(
+                                      width: 36,
+                                      height: 36,
+                                      child: Padding(
+                                        padding: EdgeInsets.all(8.0),
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                    )
+                                  : InkWell(
+                                      onTap: isInputEmpty
+                                          ? null
+                                          : () async {
+                                              setModalState(
+                                                () => isSubmitting = true,
+                                              );
+                                              try {
+                                                final response = await _apiClient
+                                                    .authenticatedRequest(
+                                                      context,
+                                                      "/api/square/notices/${post['id']}/comments",
+                                                      method: "POST",
+                                                      body: jsonEncode({
+                                                        "text":
+                                                            commentController
+                                                                .text
+                                                                .trim(),
+                                                        "parent_id":
+                                                            replyingToId,
+                                                      }),
+                                                    );
+                                                if (response.statusCode ==
+                                                    201) {
+                                                  await _fetchPosts();
+                                                  final updatedPost = _posts
+                                                      .firstWhere(
+                                                        (p) =>
+                                                            p['id'] ==
+                                                            post['id'],
+                                                        orElse: () => post,
+                                                      );
+
+                                                  final bool wasReply =
+                                                      replyingToId != null;
+
+                                                  setModalState(() {
+                                                    mutableComments = List.from(
+                                                      (updatedPost['comments']
+                                                                  as List<
+                                                                    dynamic
+                                                                  >? ??
+                                                              [])
+                                                          .where(
+                                                            (c) =>
+                                                                c['parent_id'] ==
+                                                                null,
+                                                          ),
+                                                    );
+                                                    replyingToId = null;
+                                                    replyingToName = null;
+                                                    commentController.clear();
+                                                    isInputEmpty = true;
+                                                  });
+
+                                                  if (!wasReply) {
+                                                    Future.delayed(
+                                                      const Duration(
+                                                        milliseconds: 100,
+                                                      ),
+                                                      () {
+                                                        if (listScrollController
+                                                            .hasClients) {
+                                                          listScrollController
+                                                              .animateTo(
+                                                                0.0,
+                                                                duration:
+                                                                    const Duration(
+                                                                      milliseconds:
+                                                                          300,
+                                                                    ),
+                                                                curve: Curves
+                                                                    .easeOut,
+                                                              );
+                                                        }
+                                                      },
+                                                    );
+                                                  }
+                                                }
+                                              } catch (e) {
+                                                debugPrint("Comment error: $e");
+                                              } finally {
+                                                setModalState(
+                                                  () => isSubmitting = false,
+                                                );
+                                              }
+                                            },
+                                      borderRadius: BorderRadius.circular(20),
+                                      child: CircleAvatar(
+                                        radius: 18,
+                                        backgroundColor: isInputEmpty
+                                            ? Colors.grey.shade300
+                                            : theme.colorScheme.primary,
+                                        child: const Icon(
+                                          Icons.arrow_upward,
+                                          color: Colors.white,
+                                          size: 20,
+                                        ),
+                                      ),
+                                    ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                ],
+                    ),
+                  ],
+                ),
               ),
             );
           },
         );
       },
+    );
+  }
+
+  void _showCommentActions(
+    BuildContext context,
+    dynamic c,
+    StateSetter setModalState,
+    String postId,
+  ) {
+    final currentUser = context.read<CampusSquareAuth>().user;
+    final userRole = currentUser?['role'] ?? 'STUDENT';
+    final isStaff = userRole == 'ADMIN' || userRole == 'COMMUNITY_HEAD';
+    final canDelete = c['author']['id'] == currentUser?['id'] || isStaff;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (actCtx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.copy),
+                title: const Text('Copy Text'),
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: c['text']));
+                  Navigator.pop(actCtx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Comment copied to clipboard'),
+                    ),
+                  );
+                },
+              ),
+              if (canDelete)
+                ListTile(
+                  leading: const Icon(Icons.delete_outline, color: Colors.red),
+                  title: const Text(
+                    'Delete Comment',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                  onTap: () {
+                    Navigator.pop(actCtx);
+                    _confirmDeleteComment(context, c, setModalState, postId);
+                  },
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _confirmDeleteComment(
+    BuildContext context,
+    dynamic c,
+    StateSetter setModalState,
+    String postId,
+  ) {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Delete comment?'),
+        content: const Text(
+          'Are you sure you want to delete this comment? This will also remove any replies attached to it.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            onPressed: () async {
+              Navigator.pop(dialogCtx);
+              try {
+                final response = await _apiClient.authenticatedRequest(
+                  context,
+                  "/api/square/comments/${c['id']}",
+                  method: "DELETE",
+                );
+
+                if (response.statusCode == 200) {
+                  await _fetchPosts();
+                  final updatedPost = _posts.firstWhere(
+                    (p) => p['id'] == postId,
+                  );
+                  setModalState(() {});
+                  if (!context.mounted) return;
+                  Navigator.pop(context);
+                  _showCommentsSheet(updatedPost);
+                } else {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Failed to delete comment'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              } catch (e) {
+                debugPrint("Delete comment error: $e");
+              }
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
     );
   }
 
