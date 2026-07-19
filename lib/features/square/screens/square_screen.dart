@@ -248,7 +248,7 @@ class _SquareScreenState extends State<SquareScreen> {
 
     final availableCategories = isStaff
         ? _categories.values.toList()
-        : ["ROOMMATE", "RIDE_POOL", "LOST_FOUND"];
+        : ["LOST_FOUND", "RIDE_POOL", "ROOMMATE"];
 
     String selectedType = availableCategories.first;
     bool isUrgent = false;
@@ -639,9 +639,9 @@ class _SquareScreenState extends State<SquareScreen> {
                         final isOwner = author['id'] == currentUserId;
                         final canDelete = isOwner || isStaff;
                         final isPeerPost = [
-                          "ROOMMATE",
-                          "RIDE_POOL",
                           "LOST_FOUND",
+                          "RIDE_POOL",
+                          "ROOMMATE",
                         ].contains(post['category']);
 
                         return Card(
