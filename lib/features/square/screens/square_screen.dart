@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:campus_square/core/network/api_client.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
+import 'package:campus_square/features/chat/screens/chat_screen.dart';
 
 class SquareScreen extends StatefulWidget {
   const SquareScreen({super.key});
@@ -1343,16 +1344,50 @@ class _SquareScreenState extends State<SquareScreen> {
                                               theme.colorScheme.primary,
                                           elevation: 0,
                                         ),
-                                        onPressed: () {
-                                          ScaffoldMessenger.of(
-                                            context,
-                                          ).showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                "Messaging feature coming soon to connect with ${author['first_name']}!",
-                                              ),
-                                            ),
-                                          );
+                                        onPressed: () async {
+                                          try {
+                                            final response = await _apiClient
+                                                .authenticatedRequest(
+                                                  context,
+                                                  "/api/chat/dm/${author['id']}",
+                                                  method: "POST",
+                                                );
+
+                                            if (!context.mounted) return;
+
+                                            if (response.statusCode == 200) {
+                                              final conv = jsonDecode(
+                                                response.body,
+                                              );
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (_) => ChatScreen(
+                                                    conversationId: conv['id'],
+                                                    chatTitle:
+                                                        '${author['first_name']} ${author['last_name']}',
+                                                  ),
+                                                ),
+                                              );
+                                            } else {
+                                              final error = jsonDecode(
+                                                response.body,
+                                              );
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    error['detail'] ??
+                                                        "Could not start chat",
+                                                  ),
+                                                  backgroundColor: Colors.red,
+                                                ),
+                                              );
+                                            }
+                                          } catch (e) {
+                                            debugPrint("Chat error: $e");
+                                          }
                                         },
                                       )
                                     else

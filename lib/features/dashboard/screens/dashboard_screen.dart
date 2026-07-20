@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'package:provider/provider.dart';
+import 'package:campus_square/core/network/api_client.dart';
+import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 import 'package:campus_square/features/vault/screens/vault_screen.dart';
 import 'package:campus_square/features/profile/screens/profile_screen.dart';
 import 'package:campus_square/features/square/screens/square_screen.dart';
+import 'package:campus_square/features/chat/screens/messaging_hub_screen.dart';
 
 class Dashboard extends StatefulWidget {
   const Dashboard({super.key});
@@ -12,6 +18,8 @@ class Dashboard extends StatefulWidget {
 
 class _DashboardState extends State<Dashboard> {
   int _currentIndex = 0;
+  Timer? _unreadTimer;
+  int _unreadCount = 0;
 
   final List<Widget> _screens = [
     const SquareScreen(),
@@ -19,6 +27,40 @@ class _DashboardState extends State<Dashboard> {
     const AcademicVaultScreen(),
     const ProfileScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUnreadCount();
+    _unreadTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _fetchUnreadCount(),
+    );
+  }
+
+  Future<void> _fetchUnreadCount() async {
+    try {
+      final auth = context.read<CampusSquareAuth>();
+      final apiClient = ApiClient(baseUrl: auth.baseUrl);
+      final response = await apiClient.authenticatedRequest(
+        context,
+        "/api/chat/unread-count",
+        method: "GET",
+      );
+
+      if (response.statusCode == 200 && mounted) {
+        setState(() {
+          _unreadCount = jsonDecode(response.body)['unread_count'] ?? 0;
+        });
+      }
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _unreadTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,9 +79,16 @@ class _DashboardState extends State<Dashboard> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.chat_bubble_outline_rounded),
+            icon: Badge(
+              isLabelVisible: _unreadCount > 0,
+              label: Text(_unreadCount.toString()),
+              child: const Icon(Icons.chat_bubble_outline_rounded),
+            ),
             onPressed: () {
-              // TODO: Navigate to Messaging Hub
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MessagingHubScreen()),
+              ).then((_) => _fetchUnreadCount());
             },
           ),
           const SizedBox(width: 8),

@@ -3,6 +3,7 @@ import 'package:campus_square/features/vault/screens/vault_screen.dart';
 import 'package:campus_square/features/profile/screens/profile_screen.dart';
 import 'package:campus_square/features/square/screens/square_screen.dart';
 import 'package:campus_square/features/community/screens/member_management_screen.dart';
+import 'package:campus_square/features/chat/screens/messaging_hub_screen.dart';
 
 class CommunityHeadDashboardScreen extends StatefulWidget {
   const CommunityHeadDashboardScreen({super.key});
@@ -33,6 +34,24 @@ class _CommunityHeadDashboardScreenState
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_none_rounded),
+            onPressed: () {
+              // TODO: Open Notifications Sheet
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.chat_bubble_outline_rounded),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MessagingHubScreen()),
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: _screens[_currentIndex],
       bottomNavigationBar: BottomNavigationBar(
