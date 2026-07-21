@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
@@ -40,6 +42,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   int _resendCountdown = 30;
   bool _canResendOtp = false;
 
+  Timer? _emailDebounce;
+  List<dynamic> _departments = [];
+  String? _selectedDeptId;
+
   @override
   void initState() {
     super.initState();
@@ -60,6 +66,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   void dispose() {
     _resendTimer?.cancel();
+    _emailDebounce?.cancel();
     _firstNameController.dispose();
     _lastNameController.dispose();
     _emailController.dispose();
@@ -68,6 +75,39 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _instShortNameController.dispose();
     _otpController.dispose();
     super.dispose();
+  }
+
+  void _onEmailChanged(String val) {
+    if (_emailDebounce?.isActive ?? false) _emailDebounce!.cancel();
+    _emailDebounce = Timer(const Duration(milliseconds: 800), () {
+      _fetchDepartments(val);
+    });
+  }
+
+  Future<void> _fetchDepartments(String email) async {
+    if (!email.contains('@')) return;
+    try {
+      final auth = context.read<CampusSquareAuth>();
+      final url = Uri.parse(
+        "${auth.baseUrl}/api/auth/departments-by-email?email=$email",
+      );
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final List<dynamic> deps = jsonDecode(response.body);
+        if (mounted) {
+          setState(() {
+            _departments = deps;
+            if (_selectedDeptId != null &&
+                !deps.any((d) => d['id'] == _selectedDeptId)) {
+              _selectedDeptId = null;
+            }
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Failed to load departments: $e");
+    }
   }
 
   void _startResendTimer() {
@@ -109,6 +149,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         institutionShortName: _needsOnboarding
             ? _instShortNameController.text.trim()
             : null,
+        departmentId: _selectedDeptId,
       );
 
       if (result.requiresOnboarding) {
@@ -349,6 +390,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         TextFormField(
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
+                          onChanged: _onEmailChanged,
                           decoration: const InputDecoration(
                             labelText: 'Academic Email',
                             helperText: "e.g., student@yourcollege.edu",
@@ -362,6 +404,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             return null;
                           },
                         ),
+                        const SizedBox(height: 16),
+                        if (_departments.isNotEmpty && !_needsOnboarding) ...[
+                          DropdownButtonFormField<String>(
+                            initialValue: _selectedDeptId,
+                            decoration: const InputDecoration(
+                              labelText: 'Department',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: _departments.map((dept) {
+                              return DropdownMenuItem<String>(
+                                value: dept['id'],
+                                child: Text(dept['name']),
+                              );
+                            }).toList(),
+                            onChanged: (val) =>
+                                setState(() => _selectedDeptId = val),
+                            validator: (val) => val == null
+                                ? 'Please select your department'
+                                : null,
+                          ),
+                          const SizedBox(height: 16),
+                        ],
                         const SizedBox(height: 16),
                         TextFormField(
                           controller: _passwordController,

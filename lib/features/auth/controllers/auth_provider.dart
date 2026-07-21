@@ -69,6 +69,7 @@ class CampusSquareAuth extends ChangeNotifier {
     required String lastName,
     String? institutionName,
     String? institutionShortName,
+    String? departmentId,
   }) async {
     try {
       final url = Uri.parse("$baseUrl/api/auth/register");
@@ -81,6 +82,7 @@ class CampusSquareAuth extends ChangeNotifier {
         "requested_role": "STUDENT",
         "institution_name": institutionName,
         "institution_short_name": institutionShortName,
+        "department_id": ?departmentId,
       };
 
       final response = await http.post(

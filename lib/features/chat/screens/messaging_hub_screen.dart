@@ -65,6 +65,11 @@ class _MessagingHubScreenState extends State<MessagingHubScreen> {
   }
 
   String _getChatTitle(Map<String, dynamic> conversation) {
+    if (conversation['type'] == 'DEPARTMENT' ||
+        conversation['type'] == 'GROUP') {
+      return conversation['name'] ?? 'Group Chat';
+    }
+
     if (conversation['type'] == 'DM') {
       final participants = conversation['participants'] as List<dynamic>;
       final other = participants.firstWhere(

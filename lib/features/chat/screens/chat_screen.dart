@@ -270,6 +270,38 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  bool _isSameDay(DateTime date1, DateTime date2) {
+    return date1.year == date2.year &&
+        date1.month == date2.month &&
+        date1.day == date2.day;
+  }
+
+  String _formatDateSeparator(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final msgDate = DateTime(date.year, date.month, date.day);
+
+    if (msgDate == today) return "Today";
+    if (msgDate == yesterday) return "Yesterday";
+
+    final months = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+    return "${date.day} ${months[date.month - 1]} ${date.year}";
+  }
+
   String _formatMessageTime(String isoString) {
     try {
       final date = DateTime.parse(isoString).toLocal();
@@ -362,148 +394,230 @@ class _ChatScreenState extends State<ChatScreen> {
                       final isDeleted = msg['is_deleted'] == true;
                       final replyTo = msg['reply_to'];
 
-                      return Align(
-                        alignment: isMe
-                            ? Alignment.centerRight
-                            : Alignment.centerLeft,
-                        child: GestureDetector(
-                          onLongPress: () => _showMessageOptions(msg),
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isDeleted
-                                  ? theme.colorScheme.surfaceContainerHighest
-                                        .withValues(alpha: 0.5)
-                                  : (isMe
-                                        ? theme.colorScheme.primary
-                                        : theme
-                                              .colorScheme
-                                              .surfaceContainerHighest),
-                              borderRadius: BorderRadius.only(
-                                topLeft: const Radius.circular(16),
-                                topRight: const Radius.circular(16),
-                                bottomLeft: Radius.circular(isMe ? 16 : 4),
-                                bottomRight: Radius.circular(isMe ? 4 : 16),
+                      final currentMsgDate = DateTime.parse(
+                        msg['created_at'],
+                      ).toLocal();
+
+                      // 1. Date Separator Logic
+                      bool isFirstOfDay = false;
+                      if (index == _messages.length - 1) {
+                        isFirstOfDay = true; // Oldest message
+                      } else {
+                        final previousMsgDate = DateTime.parse(
+                          _messages[index + 1]['created_at'],
+                        ).toLocal();
+                        if (!_isSameDay(currentMsgDate, previousMsgDate)) {
+                          isFirstOfDay = true;
+                        }
+                      }
+
+                      // 2. Group Consecutive Messages Logic
+                      bool isGroupedWithOlder = false;
+                      if (!isFirstOfDay && index < _messages.length - 1) {
+                        isGroupedWithOlder =
+                            msg['sender']['id'] ==
+                            _messages[index + 1]['sender']['id'];
+                      }
+
+                      // Break grouping visually if it's a reply
+                      if (replyTo != null) {
+                        isGroupedWithOlder = false;
+                      }
+
+                      bool isGroupedWithNewer = false;
+                      if (index > 0) {
+                        final newerMsgDate = DateTime.parse(
+                          _messages[index - 1]['created_at'],
+                        ).toLocal();
+                        if (_isSameDay(currentMsgDate, newerMsgDate)) {
+                          isGroupedWithNewer =
+                              msg['sender']['id'] ==
+                              _messages[index - 1]['sender']['id'];
+                        }
+                        // Also break if the newer message is a reply
+                        if (_messages[index - 1]['reply_to'] != null) {
+                          isGroupedWithNewer = false;
+                        }
+                      }
+
+                      final double bottomMargin = isGroupedWithNewer
+                          ? 2.0
+                          : 12.0;
+
+                      return Column(
+                        children: [
+                          if (isFirstOfDay)
+                            Container(
+                              margin: const EdgeInsets.symmetric(vertical: 16),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.surfaceContainerHighest
+                                    .withValues(alpha: 0.5),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                _formatDateSeparator(currentMsgDate),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blueGrey,
+                                ),
                               ),
                             ),
-                            constraints: BoxConstraints(
-                              maxWidth:
-                                  MediaQuery.of(context).size.width * 0.75,
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (replyTo != null && !isDeleted) ...[
-                                  Container(
-                                    padding: const EdgeInsets.all(8),
-                                    margin: const EdgeInsets.only(bottom: 6),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.1,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border(
-                                        left: BorderSide(
-                                          color: isMe
-                                              ? Colors.white
-                                              : theme.colorScheme.primary,
-                                          width: 3,
-                                        ),
-                                      ),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          replyTo['sender']['first_name'],
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                            color: isMe
-                                                ? Colors.white70
-                                                : theme.colorScheme.primary,
-                                          ),
-                                        ),
-                                        Text(
-                                          replyTo['content'],
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: isMe
-                                                ? Colors.white
-                                                : Colors.black87,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
 
-                                if (!isMe && !isDeleted) ...[
-                                  Text(
-                                    msg['sender']['first_name'],
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      color: theme.colorScheme.primary,
+                          Align(
+                            alignment: isMe
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
+                            child: GestureDetector(
+                              onLongPress: () => _showMessageOptions(msg),
+                              child: Container(
+                                margin: EdgeInsets.only(bottom: bottomMargin),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isDeleted
+                                      ? theme
+                                            .colorScheme
+                                            .surfaceContainerHighest
+                                            .withValues(alpha: 0.5)
+                                      : (isMe
+                                            ? theme.colorScheme.primary
+                                            : theme
+                                                  .colorScheme
+                                                  .surfaceContainerHighest),
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: Radius.circular(
+                                      !isMe
+                                          ? (isGroupedWithOlder ? 4 : 16)
+                                          : 16,
                                     ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                ],
-
-                                Text(
-                                  msg['content'],
-                                  style: TextStyle(
-                                    color: isDeleted
-                                        ? Colors.grey
-                                        : (isMe
-                                              ? Colors.white
-                                              : Colors.black87),
-                                    fontSize: 15,
-                                    fontStyle: isDeleted
-                                        ? FontStyle.italic
-                                        : FontStyle.normal,
+                                    topRight: Radius.circular(
+                                      isMe ? (isGroupedWithOlder ? 4 : 16) : 16,
+                                    ),
+                                    bottomLeft: Radius.circular(!isMe ? 4 : 16),
+                                    bottomRight: Radius.circular(isMe ? 4 : 16),
                                   ),
                                 ),
-
-                                const SizedBox(height: 4),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  mainAxisAlignment: MainAxisAlignment.end,
+                                constraints: BoxConstraints(
+                                  maxWidth:
+                                      MediaQuery.of(context).size.width * 0.75,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      _formatMessageTime(msg['created_at']),
-                                      style: TextStyle(
-                                        color: isMe
-                                            ? Colors.white70
-                                            : Colors.black54,
-                                        fontSize: 10,
-                                      ),
-                                    ),
-                                    if (isMe && !isDeleted) ...[
-                                      const SizedBox(width: 4),
-                                      Icon(
-                                        msg['is_read'] == true
-                                            ? Icons.done_all
-                                            : Icons.check,
-                                        color: msg['is_read'] == true
-                                            ? Colors.blue.shade200
-                                            : Colors.white70,
-                                        size: 14,
+                                    if (replyTo != null && !isDeleted) ...[
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        margin: const EdgeInsets.only(
+                                          bottom: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withValues(
+                                            alpha: 0.1,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          border: Border(
+                                            left: BorderSide(
+                                              color: isMe
+                                                  ? Colors.white
+                                                  : theme.colorScheme.primary,
+                                              width: 3,
+                                            ),
+                                          ),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              replyTo['sender']['first_name'],
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: isMe
+                                                    ? Colors.white70
+                                                    : theme.colorScheme.primary,
+                                              ),
+                                            ),
+                                            Text(
+                                              replyTo['content'],
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: isMe
+                                                    ? Colors.white
+                                                    : Colors.black87,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ],
+
+                                    // Hide name if it's part of a consecutive block (grouped with older)
+                                    if (!isMe &&
+                                        !isDeleted &&
+                                        !isGroupedWithOlder) ...[
+                                      Text(
+                                        msg['sender']['first_name'],
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: theme.colorScheme.primary,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                    ],
+
+                                    ExpandableMessageText(
+                                      text: msg['content'],
+                                      isMe: isMe,
+                                      isDeleted: isDeleted,
+                                    ),
+
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      children: [
+                                        Text(
+                                          _formatMessageTime(msg['created_at']),
+                                          style: TextStyle(
+                                            color: isMe
+                                                ? Colors.white70
+                                                : Colors.black54,
+                                            fontSize: 10,
+                                          ),
+                                        ),
+                                        if (isMe && !isDeleted) ...[
+                                          const SizedBox(width: 4),
+                                          Icon(
+                                            msg['is_read'] == true
+                                                ? Icons.done_all
+                                                : Icons.check,
+                                            color: msg['is_read'] == true
+                                                ? Colors.blue.shade200
+                                                : Colors.white70,
+                                            size: 14,
+                                          ),
+                                        ],
+                                      ],
+                                    ),
                                   ],
                                 ),
-                              ],
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       );
                     },
                   ),
@@ -562,12 +676,17 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             child: SafeArea(
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Expanded(
                     child: TextField(
                       controller: _messageController,
                       textCapitalization: TextCapitalization.sentences,
                       onChanged: _onTyping,
+                      keyboardType:
+                          TextInputType.multiline, // Multi-line support
+                      minLines: 1,
+                      maxLines: 5,
                       decoration: InputDecoration(
                         hintText: "Message...",
                         border: OutlineInputBorder(
@@ -582,19 +701,22 @@ class _ChatScreenState extends State<ChatScreen> {
                           vertical: 12,
                         ),
                       ),
-                      onSubmitted: (_) => _sendMessage(),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  CircleAvatar(
-                    backgroundColor: theme.colorScheme.primary,
-                    child: IconButton(
-                      icon: const Icon(
-                        Icons.send,
-                        color: Colors.white,
-                        size: 20,
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2.0),
+                    child: CircleAvatar(
+                      backgroundColor: theme.colorScheme.primary,
+                      radius: 22,
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.send,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        onPressed: _sendMessage,
                       ),
-                      onPressed: _sendMessage,
                     ),
                   ),
                 ],
@@ -603,6 +725,75 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class ExpandableMessageText extends StatefulWidget {
+  final String text;
+  final bool isMe;
+  final bool isDeleted;
+
+  const ExpandableMessageText({
+    super.key,
+    required this.text,
+    required this.isMe,
+    this.isDeleted = false,
+  });
+
+  @override
+  State<ExpandableMessageText> createState() => _ExpandableMessageTextState();
+}
+
+class _ExpandableMessageTextState extends State<ExpandableMessageText> {
+  bool _isExpanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.isDeleted) {
+      return Text(
+        widget.text,
+        style: const TextStyle(
+          color: Colors.grey,
+          fontSize: 15,
+          fontStyle: FontStyle.italic,
+        ),
+      );
+    }
+
+    final lines = widget.text.split('\n').length;
+    final isLong = widget.text.length > 250 || lines > 5;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          widget.text,
+          maxLines: (isLong && !_isExpanded) ? 5 : null,
+          overflow: (isLong && !_isExpanded) ? TextOverflow.ellipsis : null,
+          style: TextStyle(
+            color: widget.isMe ? Colors.white : Colors.black87,
+            fontSize: 15,
+          ),
+        ),
+        if (isLong)
+          GestureDetector(
+            onTap: () => setState(() => _isExpanded = !_isExpanded),
+            child: Padding(
+              padding: const EdgeInsets.only(top: 6.0, bottom: 2.0),
+              child: Text(
+                _isExpanded ? "Read Less" : "Read More...",
+                style: TextStyle(
+                  color: widget.isMe
+                      ? Colors.white.withValues(alpha: 0.8)
+                      : Colors.blue.shade700,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
