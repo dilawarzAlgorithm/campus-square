@@ -58,7 +58,16 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
         final decoded = jsonDecode(deptResponse.body);
         _departments = decoded;
         if (_departments.isNotEmpty) {
-          _selectedDeptId = _departments.first["id"];
+          if (!mounted) return;
+          final currentUser = context.read<CampusSquareAuth>().user;
+          final userDeptId = currentUser?['department_id'];
+
+          if (userDeptId != null &&
+              _departments.any((d) => d['id'] == userDeptId)) {
+            _selectedDeptId = userDeptId;
+          } else {
+            _selectedDeptId = _departments.first["id"];
+          }
         }
       }
 
@@ -313,7 +322,9 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
     if (_departments.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please create a department first.'),
+          content: Text(
+            'No departments available. Please ask your Community Head to create one first.',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -638,11 +649,12 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                           },
                         ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.add_circle_outline),
-                  onPressed: _showAddDepartmentDialog,
-                  tooltip: 'Create Department',
-                ),
+                if (userRole == 'COMMUNITY_HEAD' || userRole == 'ADMIN')
+                  IconButton(
+                    icon: const Icon(Icons.add_circle_outline),
+                    onPressed: _showAddDepartmentDialog,
+                    tooltip: 'Create Department',
+                  ),
               ],
             ),
           ),

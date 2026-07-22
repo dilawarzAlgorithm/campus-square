@@ -9,13 +9,11 @@ enum ApplicationState { initializing, unauthenticated, authenticated }
 
 class RegistrationResult {
   final bool success;
-  final bool requiresOnboarding;
   final String message;
   final String? userId;
 
   RegistrationResult({
     required this.success,
-    required this.requiresOnboarding,
     required this.message,
     this.userId,
   });
@@ -23,19 +21,13 @@ class RegistrationResult {
 
 class AuthResult {
   final bool success;
-  final bool requiresOnboarding;
   final String message;
 
-  AuthResult({
-    required this.success,
-    required this.requiresOnboarding,
-    required this.message,
-  });
+  AuthResult({required this.success, required this.message});
 }
 
 class CampusSquareAuth extends ChangeNotifier {
   final _storage = SecureStorageService();
-
   final String baseUrl = dotenv.env['API_BASE_URL'] ?? "";
 
   ApplicationState _status = ApplicationState.initializing;
@@ -67,22 +59,17 @@ class CampusSquareAuth extends ChangeNotifier {
     required String password,
     required String firstName,
     required String lastName,
-    String? institutionName,
-    String? institutionShortName,
     String? departmentId,
   }) async {
     try {
       final url = Uri.parse("$baseUrl/api/auth/register");
-
       final bodyMap = {
         "email": email,
         "password": password,
         "first_name": firstName,
         "last_name": lastName,
         "requested_role": "STUDENT",
-        "institution_name": institutionName,
-        "institution_short_name": institutionShortName,
-        "department_id": ?departmentId,
+        "department_id": departmentId,
       };
 
       final response = await http.post(
@@ -93,18 +80,9 @@ class CampusSquareAuth extends ChangeNotifier {
 
       final data = jsonDecode(response.body);
 
-      if (data is Map && data["requires_onboarding"] == true) {
-        return RegistrationResult(
-          success: false,
-          requiresOnboarding: true,
-          message: data["message"] ?? "Campus setup required.",
-        );
-      }
-
       if (response.statusCode == 201) {
         return RegistrationResult(
           success: true,
-          requiresOnboarding: false,
           message: data["message"] ?? "Successfully registered!",
           userId: data["user_id"],
         );
@@ -126,6 +104,7 @@ class CampusSquareAuth extends ChangeNotifier {
       );
 
       final data = jsonDecode(response.body);
+
       if (response.statusCode == 200) {
         return data["success"] == true;
       } else {
@@ -147,8 +126,8 @@ class CampusSquareAuth extends ChangeNotifier {
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"email": email, "password": password}),
       );
-
       final data = jsonDecode(response.body);
+
       if (response.statusCode == 200) {
         return true;
       } else {
@@ -178,7 +157,6 @@ class CampusSquareAuth extends ChangeNotifier {
           refreshToken: data["refresh_token"],
           userProfile: data["user"],
         );
-
         _user = data["user"];
         _status = ApplicationState.authenticated;
         notifyListeners();
@@ -194,17 +172,10 @@ class CampusSquareAuth extends ChangeNotifier {
   Future<AuthResult> staffLogin({
     required String email,
     required String password,
-    String? institutionName,
-    String? institutionShortName,
   }) async {
     try {
       final url = Uri.parse("$baseUrl/api/auth/login-staff");
-      final bodyMap = {
-        "email": email,
-        "password": password,
-        "institution_name": institutionName,
-        "institution_short_name": institutionShortName,
-      };
+      final bodyMap = {"email": email, "password": password};
 
       final response = await http.post(
         url,
@@ -214,29 +185,16 @@ class CampusSquareAuth extends ChangeNotifier {
 
       final data = jsonDecode(response.body);
 
-      if (data is Map && data["requires_onboarding"] == true) {
-        return AuthResult(
-          success: false,
-          requiresOnboarding: true,
-          message: data["message"] ?? "Campus setup required.",
-        );
-      }
-
       if (response.statusCode == 200) {
         await _storage.saveSession(
           accessToken: data["access_token"],
           refreshToken: data["refresh_token"],
           userProfile: data["user"],
         );
-
         _user = data["user"];
         _status = ApplicationState.authenticated;
         notifyListeners();
-        return AuthResult(
-          success: true,
-          requiresOnboarding: false,
-          message: "Logged in successfully.",
-        );
+        return AuthResult(success: true, message: "Logged in successfully.");
       } else {
         throw Exception(data["detail"] ?? "Invalid email or password.");
       }
@@ -251,7 +209,6 @@ class CampusSquareAuth extends ChangeNotifier {
     _user = updatedProfile;
     final accessToken = await _storage.getAccessToken();
     final refreshToken = await _storage.getRefreshToken();
-
     if (accessToken != null && refreshToken != null) {
       await _storage.saveSession(
         accessToken: accessToken,

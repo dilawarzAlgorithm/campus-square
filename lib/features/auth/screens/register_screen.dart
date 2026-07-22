@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
-
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -13,6 +12,7 @@ class RegisterScreen extends StatefulWidget {
     this.initialEmail,
     this.initialPassword,
   });
+
   final bool otpScreen;
   final String? initialEmail;
   final String? initialPassword;
@@ -23,19 +23,13 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
-
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-
-  final _instNameController = TextEditingController();
-  final _instShortNameController = TextEditingController();
-
   final _otpController = TextEditingController();
 
   bool _isLoading = false;
-  bool _needsOnboarding = false;
   late bool _otpVerificationStage;
 
   Timer? _resendTimer;
@@ -50,7 +44,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void initState() {
     super.initState();
     _otpVerificationStage = widget.otpScreen;
-
     if (widget.initialEmail != null) {
       _emailController.text = widget.initialEmail!;
     }
@@ -71,8 +64,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _lastNameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
-    _instNameController.dispose();
-    _instShortNameController.dispose();
     _otpController.dispose();
     super.dispose();
   }
@@ -92,7 +83,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         "${auth.baseUrl}/api/auth/departments-by-email?email=$email",
       );
       final response = await http.get(url);
-
       if (response.statusCode == 200) {
         final List<dynamic> deps = jsonDecode(response.body);
         if (mounted) {
@@ -115,7 +105,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _canResendOtp = false;
       _resendCountdown = 30;
     });
-
     _resendTimer?.cancel();
     _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_resendCountdown > 0) {
@@ -143,21 +132,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
         password: _passwordController.text.trim(),
         firstName: _firstNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
-        institutionName: _needsOnboarding
-            ? _instNameController.text.trim()
-            : null,
-        institutionShortName: _needsOnboarding
-            ? _instShortNameController.text.trim()
-            : null,
         departmentId: _selectedDeptId,
       );
 
-      if (result.requiresOnboarding) {
-        setState(() {
-          _needsOnboarding = true;
-        });
-        _showSnackBar(result.message, isError: false);
-      } else if (result.success) {
+      if (result.success) {
         setState(() {
           _otpVerificationStage = true;
         });
@@ -181,6 +159,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     setState(() => _isLoading = true);
+
     try {
       final success = await context.read<CampusSquareAuth>().verifyOtp(
         email: _emailController.text.trim(),
@@ -217,7 +196,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-
       if (success) {
         _showSnackBar("Verification code resent successfully!", isError: false);
         _startResendTimer();
@@ -274,8 +252,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
               Text(
                 _otpVerificationStage
                     ? 'Verify Your Account'
-                    : _needsOnboarding
-                    ? 'First Time Campus Onboarding'
                     : 'Create an Account',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.headlineSmall?.copyWith(
@@ -286,8 +262,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
               Text(
                 _otpVerificationStage
                     ? 'We have sent a verification code to ${_emailController.text}'
-                    : _needsOnboarding
-                    ? 'You are the first to register this email domain! Please fill in your university credentials to onboard.'
                     : 'Enter your details below using your academic email address.',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(
@@ -356,114 +330,92 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   key: _formKey,
                   child: Column(
                     children: [
-                      if (!_needsOnboarding) ...[
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: _firstNameController,
-                                decoration: const InputDecoration(
-                                  labelText: 'First Name',
-                                  border: OutlineInputBorder(),
-                                ),
-                                validator: (val) => val == null || val.isEmpty
-                                    ? 'Required'
-                                    : null,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: _firstNameController,
+                              decoration: const InputDecoration(
+                                labelText: 'First Name',
+                                border: OutlineInputBorder(),
                               ),
+                              validator: (val) => val == null || val.isEmpty
+                                  ? 'Required'
+                                  : null,
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: TextFormField(
-                                controller: _lastNameController,
-                                decoration: const InputDecoration(
-                                  labelText: 'Last Name',
-                                  border: OutlineInputBorder(),
-                                ),
-                                validator: (val) => val == null || val.isEmpty
-                                    ? 'Required'
-                                    : null,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextFormField(
+                              controller: _lastNameController,
+                              decoration: const InputDecoration(
+                                labelText: 'Last Name',
+                                border: OutlineInputBorder(),
                               ),
+                              validator: (val) => val == null || val.isEmpty
+                                  ? 'Required'
+                                  : null,
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          onChanged: _onEmailChanged,
-                          decoration: const InputDecoration(
-                            labelText: 'Academic Email',
-                            helperText: "e.g., student@yourcollege.edu",
-                            border: OutlineInputBorder(),
                           ),
-                          validator: (val) {
-                            if (val == null || val.isEmpty) return 'Required';
-                            if (!val.contains('@')) {
-                              return 'Invalid email format';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        if (_departments.isNotEmpty && !_needsOnboarding) ...[
-                          DropdownButtonFormField<String>(
-                            initialValue: _selectedDeptId,
-                            decoration: const InputDecoration(
-                              labelText: 'Department',
-                              border: OutlineInputBorder(),
-                            ),
-                            items: _departments.map((dept) {
-                              return DropdownMenuItem<String>(
-                                value: dept['id'],
-                                child: Text(dept['name']),
-                              );
-                            }).toList(),
-                            onChanged: (val) =>
-                                setState(() => _selectedDeptId = val),
-                            validator: (val) => val == null
-                                ? 'Please select your department'
-                                : null,
-                          ),
-                          const SizedBox(height: 16),
                         ],
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _passwordController,
-                          obscureText: true,
-                          decoration: const InputDecoration(
-                            labelText: 'Password (min. 8 chars)',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (val) => val == null || val.length < 8
-                              ? 'Password must be >= 8 characters'
-                              : null,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        onChanged: _onEmailChanged,
+                        decoration: const InputDecoration(
+                          labelText: 'Academic Email',
+                          helperText: "e.g., student@yourcollege.edu",
+                          border: OutlineInputBorder(),
                         ),
-                      ] else ...[
-                        TextFormField(
-                          controller: _instNameController,
-                          decoration: const InputDecoration(
-                            labelText: 'Institution Full Name',
-                            hintText:
-                                'e.g. Massachusetts Institute of Technology',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (val) => val == null || val.isEmpty
-                              ? 'Required for Onboarding'
-                              : null,
+                        validator: (val) {
+                          if (val == null || val.isEmpty) return 'Required';
+                          if (!val.contains('@')) {
+                            return 'Invalid email format';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        initialValue: _selectedDeptId,
+                        decoration: const InputDecoration(
+                          labelText: 'Department',
+                          border: OutlineInputBorder(),
                         ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _instShortNameController,
-                          decoration: const InputDecoration(
-                            labelText: 'Institution Short Name / Acronym',
-                            hintText: 'e.g. MIT',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (val) => val == null || val.isEmpty
-                              ? 'Required for Onboarding'
-                              : null,
+                        items: _departments.isEmpty
+                            ? [
+                                const DropdownMenuItem<String>(
+                                  value: null,
+                                  child: Text('No departments available'),
+                                ),
+                              ]
+                            : _departments.map((dept) {
+                                return DropdownMenuItem<String>(
+                                  value: dept['id'],
+                                  child: Text(dept['name']),
+                                );
+                              }).toList(),
+                        onChanged: _departments.isEmpty
+                            ? null
+                            : (val) => setState(() => _selectedDeptId = val),
+                        validator: (val) => val == null
+                            ? 'Please select your department'
+                            : null,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _passwordController,
+                        obscureText: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Password (min. 8 chars)',
+                          border: OutlineInputBorder(),
                         ),
-                      ],
+                        validator: (val) => val == null || val.length < 8
+                            ? 'Password must be >= 8 characters'
+                            : null,
+                      ),
                       const SizedBox(height: 32),
                       ElevatedButton(
                         onPressed: _isLoading ? null : _submitRegistration,
@@ -487,11 +439,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   strokeWidth: 2,
                                 ),
                               )
-                            : Text(
-                                _needsOnboarding
-                                    ? 'Onboard Campus'
-                                    : 'Register Account',
-                                style: const TextStyle(
+                            : const Text(
+                                'Register Account',
+                                style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
                                 ),

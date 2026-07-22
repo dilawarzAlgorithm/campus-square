@@ -1,8 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:campus_square/features/vault/screens/vault_screen.dart';
-import 'package:campus_square/features/profile/screens/profile_screen.dart';
-import 'package:campus_square/features/square/screens/square_screen.dart';
-import 'package:campus_square/features/chat/screens/messaging_hub_screen.dart';
+import 'package:provider/provider.dart';
+import 'package:campus_square/core/network/api_client.dart';
+import 'package:campus_square/features/auth/controllers/auth_provider.dart';
+import 'package:campus_square/features/profile/screens/staff_profile_screen.dart';
+import 'package:campus_square/features/admin/screens/manage_institutions_screen.dart';
+import 'package:campus_square/features/admin/screens/manage_users_global_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -15,11 +18,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   int _currentIndex = 0;
 
   final List<Widget> _screens = [
-    const SquareScreen(),
-    const Center(child: Text('Bazaar: Marketplace')),
-    const AcademicVaultScreen(),
     const _AdminPanelTab(),
-    const ProfileScreen(),
+    const StaffProfileScreen(),
   ];
 
   @override
@@ -27,28 +27,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Campus Square',
+          'Campus Square (Global)',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: false,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_none_rounded),
-            onPressed: () {
-              // TODO: Open Notifications Sheet
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.chat_bubble_outline_rounded),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const MessagingHubScreen()),
-              );
-            },
-          ),
-          const SizedBox(width: 8),
-        ],
       ),
       body: _screens[_currentIndex],
       bottomNavigationBar: BottomNavigationBar(
@@ -61,24 +43,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         },
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard_outlined),
-            activeIcon: Icon(Icons.dashboard),
-            label: 'Square',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.shopping_bag_outlined),
-            activeIcon: Icon(Icons.shopping_bag),
-            label: 'Bazaar',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.folder_outlined),
-            activeIcon: Icon(Icons.folder),
-            label: 'Vault',
-          ),
-          BottomNavigationBarItem(
             icon: Icon(Icons.admin_panel_settings_outlined),
             activeIcon: Icon(Icons.admin_panel_settings),
-            label: 'Admin',
+            label: 'Infrastructure',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
@@ -91,8 +58,43 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 }
 
-class _AdminPanelTab extends StatelessWidget {
+class _AdminPanelTab extends StatefulWidget {
   const _AdminPanelTab();
+
+  @override
+  State<_AdminPanelTab> createState() => _AdminPanelTabState();
+}
+
+class _AdminPanelTabState extends State<_AdminPanelTab> {
+  Map<String, dynamic>? _metrics;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchMetrics();
+  }
+
+  Future<void> _fetchMetrics() async {
+    try {
+      final auth = context.read<CampusSquareAuth>();
+      final client = ApiClient(baseUrl: auth.baseUrl);
+      final response = await client.authenticatedRequest(
+        context,
+        "/api/admin/metrics",
+        method: "GET",
+      );
+
+      if (response.statusCode == 200 && mounted) {
+        setState(() {
+          _metrics = jsonDecode(response.body);
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -113,18 +115,14 @@ class _AdminPanelTab extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(
-                Icons.admin_panel_settings,
-                size: 48,
-                color: theme.colorScheme.primary,
-              ),
+              Icon(Icons.public, size: 48, color: theme.colorScheme.primary),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Admin Console',
+                      'Global Infrastructure',
                       style: theme.textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: theme.colorScheme.primary,
@@ -132,7 +130,7 @@ class _AdminPanelTab extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'System-wide management and global configurations.',
+                      'Manage all registered institutions and platform-wide settings.',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: Colors.black87,
                       ),
@@ -144,25 +142,98 @@ class _AdminPanelTab extends StatelessWidget {
           ),
         ),
 
+        if (_isLoading)
+          const Center(child: CircularProgressIndicator())
+        else if (_metrics != null)
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 1.5,
+            children: [
+              _buildMetricCard(
+                context,
+                'Institutions',
+                _metrics!['total_institutions'].toString(),
+                Icons.business,
+              ),
+              _buildMetricCard(
+                context,
+                'Total Users',
+                _metrics!['total_users'].toString(),
+                Icons.people,
+              ),
+              _buildMetricCard(
+                context,
+                'Comm. Heads',
+                _metrics!['total_heads'].toString(),
+                Icons.shield,
+              ),
+              _buildMetricCard(
+                context,
+                'Resources',
+                _metrics!['total_resources'].toString(),
+                Icons.folder,
+              ),
+            ],
+          ),
+
+        const SizedBox(height: 24),
+
         _buildAdminCard(
           context,
-          'Manage Communities',
-          Icons.group_work,
-          'View, edit, or block communities.',
+          'Manage Institutions',
+          Icons.business,
+          'Provision, edit, or block campuses.',
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ManageInstitutionsScreen()),
+          ),
         ),
         _buildAdminCard(
           context,
-          'Manage Users',
+          'Global User Directory',
           Icons.people,
-          'View all students, heads, and captains.',
-        ),
-        _buildAdminCard(
-          context,
-          'System Settings',
-          Icons.settings,
-          'Global app configurations.',
+          'Search and moderate all users platform-wide.',
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ManageUsersGlobalScreen()),
+          ),
         ),
       ],
+    );
+  }
+
+  Widget _buildMetricCard(
+    BuildContext context,
+    String title,
+    String value,
+    IconData icon,
+  ) {
+    return Card(
+      elevation: 0,
+      color: Colors.grey.shade100,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: Colors.blueGrey, size: 24),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+            ),
+            Text(
+              title,
+              style: const TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -171,6 +242,7 @@ class _AdminPanelTab extends StatelessWidget {
     String title,
     IconData icon,
     String subtitle,
+    VoidCallback onTap,
   ) {
     return Card(
       elevation: 2,
@@ -187,9 +259,7 @@ class _AdminPanelTab extends StatelessWidget {
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-        onTap: () {
-          // TODO: Navigate to specific management screens
-        },
+        onTap: onTap,
       ),
     );
   }

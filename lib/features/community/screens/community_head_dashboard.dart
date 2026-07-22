@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:campus_square/features/vault/screens/vault_screen.dart';
-import 'package:campus_square/features/profile/screens/profile_screen.dart';
+import 'package:campus_square/features/profile/screens/staff_profile_screen.dart';
 import 'package:campus_square/features/square/screens/square_screen.dart';
 import 'package:campus_square/features/community/screens/member_management_screen.dart';
 import 'package:campus_square/features/chat/screens/messaging_hub_screen.dart';
@@ -19,10 +19,10 @@ class _CommunityHeadDashboardScreenState
 
   final List<Widget> _screens = [
     const SquareScreen(),
-    const Center(child: Text('Bazaar: Marketplace')),
+    const Center(child: Text('Bazaar: Marketplace (Moderation Mode)')),
     const AcademicVaultScreen(),
     const _CommunityPanelTab(),
-    const ProfileScreen(),
+    const StaffProfileScreen(),
   ];
 
   @override
@@ -119,7 +119,7 @@ class _CommunityPanelTab extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Community Hub',
+                      'Institution Hub',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: Colors.teal.shade800,
@@ -127,7 +127,7 @@ class _CommunityPanelTab extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Manage your students, captains, and moderate content.',
+                      'Manage your campus students, captains, and moderate content.',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Colors.teal.shade900,
                       ),
@@ -138,25 +138,19 @@ class _CommunityPanelTab extends StatelessWidget {
             ],
           ),
         ),
-
         _buildHeadCard(
           context,
-          'Member List',
+          'Member Directory',
           Icons.list_alt,
-          'View and manage community members.',
+          'View and manage all students in your institution.',
         ),
         _buildHeadCard(
           context,
-          'Promote Captains',
+          'Assign Captains',
           Icons.star,
-          'Assign captain roles to active students.',
+          'Promote reliable students to assist with moderation.',
         ),
-        _buildHeadCard(
-          context,
-          'Content Moderation',
-          Icons.gavel,
-          'Delete flagged messages and posts.',
-        ),
+        // Future extensions here
       ],
     );
   }
@@ -181,7 +175,7 @@ class _CommunityPanelTab extends StatelessWidget {
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.chevron_right, color: Colors.grey),
         onTap: () {
-          if (title == 'Member List' || title == 'Promote Captains') {
+          if (title == 'Member Directory' || title == 'Assign Captains') {
             Navigator.push(
               context,
               MaterialPageRoute(
