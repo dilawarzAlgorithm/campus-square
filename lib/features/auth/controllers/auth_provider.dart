@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-
 import 'package:campus_square/core/services/secure_storage_service.dart';
 
 enum ApplicationState { initializing, unauthenticated, authenticated }
@@ -261,6 +260,38 @@ class CampusSquareAuth extends ChangeNotifier {
       return false;
     } catch (e) {
       debugPrint("Error updating name: $e");
+      return false;
+    }
+  }
+
+  Future<bool> updatePreferences(
+    String dietary,
+    String sleep,
+    String study,
+  ) async {
+    try {
+      final accessToken = await _storage.getAccessToken();
+      final response = await http.patch(
+        Uri.parse("$baseUrl/api/auth/profile"),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $accessToken",
+        },
+        body: jsonEncode({
+          "dietary_preference": dietary,
+          "sleep_schedule": sleep,
+          "study_habits": study,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        await updateUserProfileLocally(data);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint("Error updating preferences: $e");
       return false;
     }
   }

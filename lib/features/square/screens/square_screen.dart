@@ -23,11 +23,22 @@ class _SquareScreenState extends State<SquareScreen> {
   String? _selectedCategory;
 
   final Map<String, String> _categories = {
-    "📢 Notices": "NOTICE",
-    "🎉 Events": "EVENT",
-    "🔍 Lost & Found": "LOST_FOUND",
-    "🚗 Ride Pool": "RIDE_POOL",
-    "🛋️ Roommate": "ROOMMATE",
+    "Notices": "NOTICE",
+    "Events": "EVENT",
+    "Lost & Found": "LOST_FOUND",
+    "Ride Pool": "RIDE_POOL",
+    "Roommate": "ROOMMATE",
+  };
+
+  final Map<String, ({IconData icon, Color color})> _categoryInfo = {
+    "NOTICE": (icon: Icons.campaign_rounded, color: Colors.orange),
+    "EVENT": (icon: Icons.celebration_rounded, color: Colors.purple),
+    "LOST_FOUND": (icon: Icons.search_rounded, color: Colors.green),
+    "RIDE_POOL": (
+      icon: Icons.directions_car_filled_rounded,
+      color: Colors.blue,
+    ),
+    "ROOMMATE": (icon: Icons.bed_rounded, color: Colors.teal),
   };
 
   @override
@@ -65,6 +76,64 @@ class _SquareScreenState extends State<SquareScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showRoommateDetails(BuildContext context, Map<String, dynamic> author) {
+    final profile = author['profile'] as Map<String, dynamic>?;
+    final diet = profile?['dietary_preference'] ?? 'Not specified';
+    final sleep = profile?['sleep_schedule'] ?? 'Not specified';
+    final study = profile?['study_habits'] ?? 'Not specified';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("${author['first_name']}'s Preferences"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildPrefRow(Icons.restaurant, 'Dietary', diet),
+            const SizedBox(height: 12),
+            _buildPrefRow(Icons.nights_stay, 'Sleep', sleep),
+            const SizedBox(height: 12),
+            _buildPrefRow(Icons.menu_book, 'Study', study),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPrefRow(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: Colors.blueGrey),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _deletePost(String postId) async {
@@ -1079,7 +1148,18 @@ class _SquareScreenState extends State<SquareScreen> {
                   return Padding(
                     padding: const EdgeInsets.only(right: 8.0),
                     child: ChoiceChip(
-                      label: Text(entry.key),
+                      label: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _categoryInfo[entry.value]!.icon,
+                            color: _categoryInfo[entry.value]!.color,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(entry.key),
+                        ],
+                      ),
                       selected: _selectedCategory == entry.value,
                       onSelected: (selected) {
                         setState(
@@ -1327,68 +1407,142 @@ class _SquareScreenState extends State<SquareScreen> {
                                       MainAxisAlignment.spaceBetween,
                                   children: [
                                     if (isPeerPost)
-                                      ElevatedButton.icon(
-                                        icon: const Icon(
-                                          Icons.chat_bubble_outline,
-                                          size: 18,
-                                        ),
-                                        label: Text(
-                                          'Message ${author['first_name']}',
-                                        ),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: theme
-                                              .colorScheme
-                                              .primary
-                                              .withValues(alpha: 0.1),
-                                          foregroundColor:
-                                              theme.colorScheme.primary,
-                                          elevation: 0,
-                                        ),
-                                        onPressed: () async {
-                                          try {
-                                            final response = await _apiClient
-                                                .authenticatedRequest(
-                                                  context,
-                                                  "/api/chat/dm/${author['id']}",
-                                                  method: "POST",
-                                                );
-
-                                            if (!context.mounted) return;
-
-                                            if (response.statusCode == 200) {
-                                              final conv = jsonDecode(
-                                                response.body,
-                                              );
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (_) => ChatScreen(
-                                                    conversationId: conv['id'],
-                                                    chatTitle:
-                                                        '${author['first_name']} ${author['last_name']}',
-                                                  ),
+                                      Expanded(
+                                        child: Wrap(
+                                          spacing: 8,
+                                          runSpacing: 8,
+                                          crossAxisAlignment:
+                                              WrapCrossAlignment.center,
+                                          children: [
+                                            if (post['category'] == 'ROOMMATE')
+                                              TextButton.icon(
+                                                icon: const Icon(
+                                                  Icons.info_outline,
+                                                  size: 18,
                                                 ),
-                                              );
-                                            } else {
-                                              final error = jsonDecode(
-                                                response.body,
-                                              );
-                                              ScaffoldMessenger.of(
-                                                context,
-                                              ).showSnackBar(
-                                                SnackBar(
-                                                  content: Text(
-                                                    error['detail'] ??
-                                                        "Could not start chat",
-                                                  ),
-                                                  backgroundColor: Colors.red,
-                                                ),
-                                              );
-                                            }
-                                          } catch (e) {
-                                            debugPrint("Chat error: $e");
-                                          }
-                                        },
+                                                label: const Text('Details'),
+                                                onPressed: () =>
+                                                    _showRoommateDetails(
+                                                      context,
+                                                      author,
+                                                    ),
+                                              ),
+                                            ElevatedButton.icon(
+                                              icon: const Icon(
+                                                Icons.chat_bubble_outline,
+                                                size: 18,
+                                              ),
+                                              label: Text(
+                                                'Message ${author['first_name']}',
+                                              ),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: theme
+                                                    .colorScheme
+                                                    .primary
+                                                    .withValues(alpha: 0.1),
+                                                foregroundColor:
+                                                    theme.colorScheme.primary,
+                                                elevation: 0,
+                                              ),
+                                              onPressed: () async {
+                                                String? initialText;
+                                                if (post['category'] ==
+                                                    'ROOMMATE') {
+                                                  final myProfile =
+                                                      currentUser?['profile'];
+                                                  final diet =
+                                                      myProfile?['dietary_preference'];
+                                                  final sleep =
+                                                      myProfile?['sleep_schedule'];
+                                                  final study =
+                                                      myProfile?['study_habits'];
+
+                                                  List<String> habits = [];
+                                                  if (diet != null &&
+                                                      diet
+                                                          .toString()
+                                                          .trim()
+                                                          .isNotEmpty) {
+                                                    habits.add('- Diet: $diet');
+                                                  }
+                                                  if (sleep != null &&
+                                                      sleep
+                                                          .toString()
+                                                          .trim()
+                                                          .isNotEmpty) {
+                                                    habits.add(
+                                                      '- Sleep: $sleep',
+                                                    );
+                                                  }
+                                                  if (study != null &&
+                                                      study
+                                                          .toString()
+                                                          .trim()
+                                                          .isNotEmpty) {
+                                                    habits.add(
+                                                      '- Study: $study',
+                                                    );
+                                                  }
+
+                                                  if (habits.isNotEmpty) {
+                                                    initialText =
+                                                        'Hi! I saw your roommate post. Here are my habits:\n${habits.join('\n')}\nLet me know if we are a match!';
+                                                  } else {
+                                                    initialText =
+                                                        'Hi! I saw your roommate post. Let me know if we are a match!';
+                                                  }
+                                                }
+
+                                                try {
+                                                  final response = await _apiClient
+                                                      .authenticatedRequest(
+                                                        context,
+                                                        "/api/chat/dm/${author['id']}",
+                                                        method: "POST",
+                                                      );
+                                                  if (!context.mounted) return;
+                                                  if (response.statusCode ==
+                                                      200) {
+                                                    final conv = jsonDecode(
+                                                      response.body,
+                                                    );
+                                                    Navigator.push(
+                                                      context,
+                                                      MaterialPageRoute(
+                                                        builder: (_) => ChatScreen(
+                                                          conversationId:
+                                                              conv['id'],
+                                                          chatTitle:
+                                                              '${author['first_name']} ${author['last_name']}',
+                                                          initialText:
+                                                              initialText,
+                                                        ),
+                                                      ),
+                                                    );
+                                                  } else {
+                                                    final error = jsonDecode(
+                                                      response.body,
+                                                    );
+                                                    ScaffoldMessenger.of(
+                                                      context,
+                                                    ).showSnackBar(
+                                                      SnackBar(
+                                                        content: Text(
+                                                          error['detail'] ??
+                                                              "Could not start chat",
+                                                        ),
+                                                        backgroundColor:
+                                                            Colors.red,
+                                                      ),
+                                                    );
+                                                  }
+                                                } catch (e) {
+                                                  debugPrint("Chat error: $e");
+                                                }
+                                              },
+                                            ),
+                                          ],
+                                        ),
                                       )
                                     else
                                       TextButton.icon(
@@ -1409,23 +1563,66 @@ class _SquareScreenState extends State<SquareScreen> {
                                         vertical: 4,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: Colors.grey.shade100,
+                                        color: const Color.fromARGB(
+                                          255,
+                                          239,
+                                          238,
+                                          238,
+                                        ),
                                         borderRadius: BorderRadius.circular(12),
                                       ),
-                                      child: Text(
-                                        _categories.entries
-                                            .firstWhere(
-                                              (e) =>
-                                                  e.value == post['category'],
-                                              orElse: () =>
-                                                  const MapEntry("", ""),
-                                            )
-                                            .key,
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.blueGrey,
-                                          fontWeight: FontWeight.w500,
-                                        ),
+                                      child: Builder(
+                                        builder: (context) {
+                                          final category = _categories.entries
+                                              .firstWhere(
+                                                (e) =>
+                                                    e.value == post['category'],
+                                                orElse: () => const MapEntry(
+                                                  'Unknown',
+                                                  '',
+                                                ),
+                                              );
+
+                                          final info =
+                                              _categoryInfo[category.value];
+
+                                          return Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              if (info != null) ...[
+                                                Container(
+                                                  padding: const EdgeInsets.all(
+                                                    3,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: info.color
+                                                        .withValues(
+                                                          alpha: 0.12,
+                                                        ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          6,
+                                                        ),
+                                                  ),
+                                                  child: Icon(
+                                                    info.icon,
+                                                    size: 14,
+                                                    color: info.color,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 6),
+                                              ],
+                                              Text(
+                                                category.key,
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.blueGrey,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ],
+                                          );
+                                        },
                                       ),
                                     ),
                                   ],

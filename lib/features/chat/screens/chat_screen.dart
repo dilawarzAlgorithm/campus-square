@@ -11,11 +11,13 @@ import 'package:campus_square/core/services/secure_storage_service.dart';
 class ChatScreen extends StatefulWidget {
   final String conversationId;
   final String chatTitle;
+  final String? initialText;
 
   const ChatScreen({
     super.key,
     required this.conversationId,
     required this.chatTitle,
+    this.initialText,
   });
 
   @override
@@ -43,6 +45,9 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialText != null) {
+      _messageController.text = widget.initialText!;
+    }
     final auth = context.read<CampusSquareAuth>();
     _currentUserId = auth.user?['id'];
     _apiClient = ApiClient(baseUrl: auth.baseUrl);
@@ -398,10 +403,9 @@ class _ChatScreenState extends State<ChatScreen> {
                         msg['created_at'],
                       ).toLocal();
 
-                      // 1. Date Separator Logic
                       bool isFirstOfDay = false;
                       if (index == _messages.length - 1) {
-                        isFirstOfDay = true; // Oldest message
+                        isFirstOfDay = true;
                       } else {
                         final previousMsgDate = DateTime.parse(
                           _messages[index + 1]['created_at'],
@@ -411,7 +415,6 @@ class _ChatScreenState extends State<ChatScreen> {
                         }
                       }
 
-                      // 2. Group Consecutive Messages Logic
                       bool isGroupedWithOlder = false;
                       if (!isFirstOfDay && index < _messages.length - 1) {
                         isGroupedWithOlder =
@@ -419,7 +422,6 @@ class _ChatScreenState extends State<ChatScreen> {
                             _messages[index + 1]['sender']['id'];
                       }
 
-                      // Break grouping visually if it's a reply
                       if (replyTo != null) {
                         isGroupedWithOlder = false;
                       }
@@ -434,7 +436,6 @@ class _ChatScreenState extends State<ChatScreen> {
                               msg['sender']['id'] ==
                               _messages[index - 1]['sender']['id'];
                         }
-                        // Also break if the newer message is a reply
                         if (_messages[index - 1]['reply_to'] != null) {
                           isGroupedWithNewer = false;
                         }
@@ -563,7 +564,6 @@ class _ChatScreenState extends State<ChatScreen> {
                                       ),
                                     ],
 
-                                    // Hide name if it's part of a consecutive block (grouped with older)
                                     if (!isMe &&
                                         !isDeleted &&
                                         !isGroupedWithOlder) ...[
@@ -683,8 +683,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       controller: _messageController,
                       textCapitalization: TextCapitalization.sentences,
                       onChanged: _onTyping,
-                      keyboardType:
-                          TextInputType.multiline, // Multi-line support
+                      keyboardType: TextInputType.multiline,
                       minLines: 1,
                       maxLines: 5,
                       decoration: InputDecoration(

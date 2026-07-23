@@ -89,6 +89,137 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
     }
   }
 
+  Future<void> _updateRollNumber(String userId, String rollNumber) async {
+    try {
+      final response = await _apiClient.authenticatedRequest(
+        context,
+        "/api/community/members/$userId/roll-number",
+        method: "PATCH",
+        body: jsonEncode({"roll_number": rollNumber}),
+      );
+      if (response.statusCode == 200) {
+        _fetchMembers();
+        _showSuccess("Roll number updated successfully");
+      } else {
+        _showError(jsonDecode(response.body)['detail'] ?? "Update failed");
+      }
+    } catch (e) {
+      _showError("Update error: $e");
+    }
+  }
+
+  void _showEditRollNumberDialog(Map<String, dynamic> user) {
+    final controller = TextEditingController(text: user['roll_number'] ?? '');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("Edit Roll Number"),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Roll Number / Student ID',
+            hintText: 'e.g. 26BCS098',
+            border: OutlineInputBorder(),
+          ),
+          textCapitalization: TextCapitalization.characters,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _updateRollNumber(user['id'], controller.text.trim());
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAutoAssignDialog() {
+    bool extractFromEmail = true;
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Text('Auto-Assign Roll Numbers'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Extract roll numbers automatically from student emails? (e.g. 26BCS098@mit.edu -> 26BCS098). This will apply to existing students missing a roll number and all future registrations.',
+                  style: TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 16),
+                SwitchListTile(
+                  title: const Text(
+                    'Enable Auto-Extraction',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  value: extractFromEmail,
+                  onChanged: (val) =>
+                      setDialogState(() => extractFromEmail = val),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton.icon(
+                onPressed: isSubmitting
+                    ? null
+                    : () async {
+                        setDialogState(() => isSubmitting = true);
+                        try {
+                          final response = await _apiClient
+                              .authenticatedRequest(
+                                context,
+                                "/api/community/settings/auto-roll-numbers",
+                                method: "POST",
+                                body: jsonEncode({
+                                  "extract_roll_from_email": extractFromEmail,
+                                }),
+                              );
+                          if (!context.mounted) return;
+                          Navigator.pop(ctx);
+                          if (response.statusCode == 200) {
+                            _showSuccess(jsonDecode(response.body)['message']);
+                            _fetchMembers();
+                          } else {
+                            _showError("Failed to update settings");
+                          }
+                        } catch (e) {
+                          if (context.mounted) Navigator.pop(ctx);
+                          _showError("Error: $e");
+                        }
+                      },
+                icon: isSubmitting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.auto_fix_high, size: 18),
+                label: const Text('Apply Changes'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   void _showError(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -108,7 +239,17 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Member Directory')),
+      appBar: AppBar(
+        title: const Text('Member Directory'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.auto_fix_high),
+            tooltip: "Auto-Assign Roll Numbers",
+            onPressed: _showAutoAssignDialog,
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _members.isEmpty
@@ -121,7 +262,6 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
                 final user = _members[index];
                 final bool isBlocked = user['is_blocked'] ?? false;
                 final String role = user['role'] ?? 'STUDENT';
-
                 final bool isHead = role == 'COMMUNITY_HEAD';
 
                 return ListTile(
@@ -150,6 +290,15 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(user['email'], style: const TextStyle(fontSize: 12)),
+                      if (user['roll_number'] != null)
+                        Text(
+                          "Roll No: ${user['roll_number']}",
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blueGrey,
+                          ),
+                        ),
                       const SizedBox(height: 4),
                       Row(
                         children: [
@@ -205,8 +354,16 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
                             if (value == 'demote') {
                               _updateRole(user['id'], 'STUDENT');
                             }
+                            if (value == 'edit_roll') {
+                              _showEditRollNumberDialog(user);
+                            }
                           },
                           itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'edit_roll',
+                              child: Text('Edit Roll Number'),
+                            ),
+                            const PopupMenuDivider(),
                             if (role == 'STUDENT')
                               const PopupMenuItem(
                                 value: 'promote',

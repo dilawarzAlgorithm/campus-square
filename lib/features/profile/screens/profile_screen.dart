@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 import 'package:campus_square/features/vault/screens/saved_vault_screen.dart';
+import 'package:campus_square/features/profile/screens/full_profile_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -317,6 +318,20 @@ class ProfileScreen extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (context) => const SavedVaultScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const Divider(height: 1, indent: 56),
+                ListTile(
+                  leading: const Icon(Icons.person_outline),
+                  title: const Text('Personal Information'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const FullProfileScreen(),
                       ),
                     );
                   },
