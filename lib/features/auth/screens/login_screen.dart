@@ -14,7 +14,6 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-
   bool _isLoading = false;
 
   void _handleLogin() async {
@@ -25,11 +24,13 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     setState(() => _isLoading = true);
+
     try {
       final success = await context.read<CampusSquareAuth>().login(
-        _emailController.text.trim(),
+        _emailController.text.trim().toLowerCase(),
         _passwordController.text,
       );
+
       if (!success && mounted) {
         _showSnackBar("Invalid credentials. Try again.", isError: true);
       }
@@ -44,7 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
           MaterialPageRoute(
             builder: (context) => RegisterScreen(
               otpScreen: true,
-              initialEmail: _emailController.text.trim(),
+              initialEmail: _emailController.text.trim().toLowerCase(),
               initialPassword: pass,
             ),
           ),
@@ -100,6 +101,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
               ),
               const SizedBox(height: 48),
+
               TextField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
@@ -119,6 +121,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   prefixIcon: Icon(Icons.lock_outline),
                 ),
               ),
+
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: _isLoading ? null : _handleLogin,

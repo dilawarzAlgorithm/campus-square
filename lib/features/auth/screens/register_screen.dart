@@ -71,7 +71,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void _onEmailChanged(String val) {
     if (_emailDebounce?.isActive ?? false) _emailDebounce!.cancel();
     _emailDebounce = Timer(const Duration(milliseconds: 800), () {
-      _fetchDepartments(val);
+      _fetchDepartments(val.toLowerCase());
     });
   }
 
@@ -128,7 +128,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     try {
       final result = await auth.register(
-        email: _emailController.text.trim(),
+        email: _emailController.text.trim().toLowerCase(),
         password: _passwordController.text.trim(),
         firstName: _firstNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
@@ -162,7 +162,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     try {
       final success = await context.read<CampusSquareAuth>().verifyOtp(
-        email: _emailController.text.trim(),
+        email: _emailController.text.trim().toLowerCase(),
         otp: _otpController.text.trim(),
       );
 
@@ -193,7 +193,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
     try {
       final success = await context.read<CampusSquareAuth>().resendOtp(
-        email: _emailController.text.trim(),
+        email: _emailController.text.trim().toLowerCase(),
         password: _passwordController.text.trim(),
       );
       if (success) {
@@ -261,7 +261,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(height: 8),
               Text(
                 _otpVerificationStage
-                    ? 'We have sent a verification code to ${_emailController.text}'
+                    ? 'We have sent a verification code to ${_emailController.text.toLowerCase()}'
                     : 'Enter your details below using your academic email address.',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(

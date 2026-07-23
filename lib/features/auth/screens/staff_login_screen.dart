@@ -25,7 +25,7 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
 
     try {
       final result = await context.read<CampusSquareAuth>().staffLogin(
-        email: _emailController.text.trim(),
+        email: _emailController.text.trim().toLowerCase(),
         password: _passwordController.text,
       );
 
