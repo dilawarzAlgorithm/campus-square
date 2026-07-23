@@ -225,6 +225,30 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
     }
   }
 
+  void _navigateToEditScreen(Map<String, dynamic> item) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditResourceScreen(
+          apiClient: _apiClient,
+          departments: _departments,
+          resourceTypes: _resourceTypes,
+          semesters: _semesters,
+          resourceId: item['id'],
+          initialTitle: item['title'],
+          initialDescription: item['description'],
+          initialType: item['resource_type'],
+          initialSemester: item['semester'],
+          initialDeptId: item['department_id'],
+        ),
+      ),
+    );
+
+    if (result == true) {
+      _fetchResources();
+    }
+  }
+
   void _confirmDeleteResource(String resourceId) {
     showDialog(
       context: context,
@@ -352,68 +376,105 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
   void _handlePreview(Map<String, dynamic> item) {
     final String urlString = item["file_url"] ?? "";
     final String lowerUrl = urlString.toLowerCase();
-
-    if (lowerUrl.endsWith(".png") ||
+    final bool isImage =
+        lowerUrl.endsWith(".png") ||
         lowerUrl.endsWith(".jpg") ||
         lowerUrl.endsWith(".jpeg") ||
-        lowerUrl.endsWith(".gif")) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(
-            item["title"],
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          content: Column(
+        lowerUrl.endsWith(".gif") ||
+        lowerUrl.endsWith(".webp");
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Resource Details"),
+        content: SingleChildScrollView(
+          child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(ctx).size.height * 0.4,
+              Text(
+                item["title"],
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    urlString,
-                    fit: BoxFit.contain,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return const Padding(
-                        padding: EdgeInsets.all(32.0),
-                        child: CircularProgressIndicator(),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) =>
-                        const Text("Failed to load image preview."),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Chip(
+                    label: Text(
+                      item["resource_type"],
+                      style: const TextStyle(fontSize: 10),
+                    ),
+                    visualDensity: VisualDensity.compact,
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Sem ${item["semester"]}',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
               ),
               if (item["description"] != null) ...[
                 const SizedBox(height: 12),
+                const Text(
+                  "Description:",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 4),
                 Text(item["description"], style: const TextStyle(fontSize: 14)),
+              ],
+              if (isImage) ...[
+                const SizedBox(height: 16),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(ctx).size.height * 0.4,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      urlString,
+                      fit: BoxFit.contain,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return const Padding(
+                          padding: EdgeInsets.all(32.0),
+                          child: CircularProgressIndicator(),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) =>
+                          const Text("Failed to load image preview."),
+                    ),
+                  ),
+                ),
               ],
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Close'),
-            ),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.pop(ctx);
-                _openResource(urlString, inAppPreview: false);
-              },
-              icon: const Icon(Icons.open_in_new, size: 16),
-              label: const Text('Open Externally'),
-            ),
-          ],
         ),
-      );
-    } else {
-      _openResource(urlString, inAppPreview: true);
-    }
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _openResource(urlString, inAppPreview: !isImage);
+            },
+            icon: Icon(
+              isImage ? Icons.open_in_new : Icons.picture_as_pdf,
+              size: 16,
+            ),
+            label: Text(isImage ? 'Open Externally' : 'View Document'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _openResource(
@@ -725,94 +786,87 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                             onTap: () => _handlePreview(item),
                             child: Padding(
                               padding: const EdgeInsets.all(16.0),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          item["title"],
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 16,
-                                          ),
-                                        ),
-                                        if (item["description"] != null) ...[
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            item["description"],
-                                            style: const TextStyle(
-                                              color: Colors.black87,
-                                            ),
-                                          ),
-                                        ],
-                                        const SizedBox(height: 8),
-                                        Row(
-                                          children: [
-                                            Chip(
-                                              label: Text(
-                                                item["resource_type"],
-                                                style: const TextStyle(
-                                                  fontSize: 10,
-                                                ),
-                                              ),
-                                              visualDensity:
-                                                  VisualDensity.compact,
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              'Sem ${item["semester"]}',
-                                              style: const TextStyle(
-                                                fontSize: 12,
-                                                color: Colors.grey,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
+                                  Text(
+                                    item["title"],
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
                                     ),
+                                  ),
+                                  if (item["description"] != null) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      item["description"],
+                                      maxLines: 3,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      Chip(
+                                        label: Text(
+                                          item["resource_type"],
+                                          style: const TextStyle(fontSize: 10),
+                                        ),
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Sem ${item["semester"]}',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                   const SizedBox(width: 12),
                                   Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          GestureDetector(
-                                            onTap: () => _voteResource(
-                                              item["id"],
-                                              "UPVOTE",
-                                            ),
-                                            child: Icon(
-                                              Icons.keyboard_arrow_up,
-                                              color: theme.colorScheme.primary,
-                                              size: 28,
-                                            ),
-                                          ),
-                                          Text(
-                                            '${item["upvote_count"] - item["downvote_count"]}',
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                          GestureDetector(
-                                            onTap: () => _voteResource(
-                                              item["id"],
-                                              "DOWNVOTE",
-                                            ),
-                                            child: const Icon(
-                                              Icons.keyboard_arrow_down,
-                                              color: Colors.red,
-                                              size: 28,
-                                            ),
-                                          ),
-                                        ],
+                                      GestureDetector(
+                                        onTap: () =>
+                                            _voteResource(item["id"], "UPVOTE"),
+                                        child: Icon(
+                                          Icons.thumb_up_alt,
+                                          color: (item["my_vote"] == "UPVOTE")
+                                              ? theme.colorScheme.primary
+                                              : Colors.grey,
+                                          size: 24,
+                                        ),
                                       ),
+                                      SizedBox(width: 7),
+                                      Text(
+                                        '${item["upvote_count"] - item["downvote_count"]}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      SizedBox(width: 7),
+                                      GestureDetector(
+                                        onTap: () => _voteResource(
+                                          item["id"],
+                                          "DOWNVOTE",
+                                        ),
+                                        child: Icon(
+                                          Icons.thumb_down_alt,
+                                          color: (item["my_vote"] == "DOWNVOTE")
+                                              ? Colors.red
+                                              : Colors.grey,
+                                          size: 24,
+                                        ),
+                                      ),
+                                      Spacer(),
                                       const SizedBox(width: 4),
                                       IconButton(
                                         icon: Icon(
@@ -839,17 +893,29 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                                           inAppPreview: false,
                                         ),
                                       ),
-                                      if (canDelete)
+                                      if (canDelete) ...[
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.edit_outlined,
+                                            size: 20,
+                                          ),
+                                          color: Colors.grey,
+                                          tooltip: "Edit Resource",
+                                          onPressed: () {
+                                            _navigateToEditScreen(item);
+                                          },
+                                        ),
                                         IconButton(
                                           icon: const Icon(
                                             Icons.delete_outline,
                                           ),
-                                          color: Colors.grey,
-                                          onPressed: () =>
-                                              _confirmDeleteResource(
-                                                item["id"],
-                                              ),
+                                          color: Colors.red,
+                                          tooltip: "Delete Resource",
+                                          onPressed: () {
+                                            _confirmDeleteResource(item["id"]);
+                                          },
                                         ),
+                                      ],
                                     ],
                                   ),
                                 ],
@@ -862,6 +928,227 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                   ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class EditResourceScreen extends StatefulWidget {
+  final ApiClient apiClient;
+  final List<dynamic> departments;
+  final List<String> resourceTypes;
+  final List<int> semesters;
+  final String resourceId;
+  final String initialTitle;
+  final String? initialDescription;
+  final String initialType;
+  final int initialSemester;
+  final String initialDeptId;
+
+  const EditResourceScreen({
+    super.key,
+    required this.apiClient,
+    required this.departments,
+    required this.resourceTypes,
+    required this.semesters,
+    required this.resourceId,
+    required this.initialTitle,
+    this.initialDescription,
+    required this.initialType,
+    required this.initialSemester,
+    required this.initialDeptId,
+  });
+
+  @override
+  State<EditResourceScreen> createState() => _EditResourceScreenState();
+}
+
+class _EditResourceScreenState extends State<EditResourceScreen> {
+  late final TextEditingController _titleController;
+  late final TextEditingController _descController;
+  bool _isSaving = false;
+
+  late String _selectedType;
+  late int _selectedSemester;
+  late String _selectedDeptId;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController(text: widget.initialTitle);
+    _descController = TextEditingController(
+      text: widget.initialDescription ?? '',
+    );
+    _selectedDeptId = widget.initialDeptId;
+    _selectedType = widget.initialType;
+    _selectedSemester = widget.initialSemester;
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitEdit() async {
+    if (_titleController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Title is required.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      final payload = {
+        "title": _titleController.text.trim(),
+        "description": _descController.text.trim().isNotEmpty
+            ? _descController.text.trim()
+            : null,
+        "resource_type": _selectedType,
+        "semester": _selectedSemester,
+        "department_id": _selectedDeptId,
+      };
+
+      final response = await widget.apiClient.authenticatedRequest(
+        context,
+        "/api/vault/resources/${widget.resourceId}",
+        method: "PATCH",
+        body: jsonEncode(payload),
+      );
+
+      if (response.statusCode == 200) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Resource updated successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context, true);
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception(error['detail'] ?? 'Update failed');
+      }
+    } catch (e) {
+      debugPrint("Update error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll("Exception: ", "")),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Edit Resource')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            DropdownButtonFormField<String>(
+              initialValue: _selectedDeptId,
+              decoration: const InputDecoration(
+                labelText: 'Target Department',
+                border: OutlineInputBorder(),
+              ),
+              items: widget.departments.map<DropdownMenuItem<String>>((dept) {
+                return DropdownMenuItem<String>(
+                  value: dept['id'],
+                  child: Text("[${dept['code']}] ${dept['name']}"),
+                );
+              }).toList(),
+              onChanged: (val) => setState(() => _selectedDeptId = val!),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _titleController,
+              maxLength: 100,
+              decoration: const InputDecoration(
+                labelText: 'Title',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _selectedType,
+                    decoration: const InputDecoration(
+                      labelText: 'Resource Type',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: widget.resourceTypes.map((type) {
+                      return DropdownMenuItem(value: type, child: Text(type));
+                    }).toList(),
+                    onChanged: (val) => setState(() => _selectedType = val!),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: DropdownButtonFormField<int>(
+                    initialValue: _selectedSemester,
+                    decoration: const InputDecoration(
+                      labelText: 'Semester',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: widget.semesters.map((sem) {
+                      return DropdownMenuItem(
+                        value: sem,
+                        child: Text('Sem $sem'),
+                      );
+                    }).toList(),
+                    onChanged: (val) =>
+                        setState(() => _selectedSemester = val!),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _descController,
+              maxLines: 3,
+              maxLength: 500,
+              decoration: const InputDecoration(
+                labelText: 'Description (Optional)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton(
+              onPressed: _isSaving ? null : _submitEdit,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              child: _isSaving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text(
+                      'Save Changes',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1055,6 +1342,7 @@ class _UploadResourceScreenState extends State<UploadResourceScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: _titleController,
+              maxLength: 100,
               decoration: const InputDecoration(
                 labelText: 'Title',
                 hintText: 'e.g., Data Structures Midsem 2024',
@@ -1143,6 +1431,7 @@ class _UploadResourceScreenState extends State<UploadResourceScreen> {
             TextField(
               controller: _descController,
               maxLines: 3,
+              maxLength: 500,
               decoration: const InputDecoration(
                 labelText: 'Description (Optional)',
                 border: OutlineInputBorder(),
