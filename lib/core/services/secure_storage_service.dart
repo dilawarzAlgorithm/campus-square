@@ -62,4 +62,16 @@ class SecureStorageService {
   Future<void> clearDraftMessage(String conversationId) async {
     await _storage.delete(key: 'DRAFT_$conversationId');
   }
+
+  Future<void> saveGroupIcon(String conversationId, int iconCode) async {
+    await _storage.write(
+      key: 'GROUP_ICON_$conversationId',
+      value: iconCode.toString(),
+    );
+  }
+
+  Future<int?> getGroupIcon(String conversationId) async {
+    final val = await _storage.read(key: 'GROUP_ICON_$conversationId');
+    return val != null ? int.tryParse(val) : null;
+  }
 }

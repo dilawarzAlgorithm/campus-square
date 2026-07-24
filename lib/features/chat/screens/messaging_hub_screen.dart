@@ -26,6 +26,7 @@ class _MessagingHubScreenState extends State<MessagingHubScreen>
   StreamSubscription? _hubSubscription;
   final Map<String, bool> _typingStatus = {};
   final Map<String, String> _drafts = {};
+  final Map<String, IconData> _groupIcons = {};
 
   Timer? _pollingTimer;
 
@@ -161,16 +162,25 @@ class _MessagingHubScreenState extends State<MessagingHubScreen>
   Future<void> _loadDrafts() async {
     final storage = SecureStorageService();
     Map<String, String> drafts = {};
+    Map<String, IconData> icons = {};
     for (var conv in _conversations) {
       final draft = await storage.getDraftMessage(conv['id']);
       if (draft != null && draft.isNotEmpty) {
         drafts[conv['id']] = draft;
+      }
+      if (conv['type'] == 'GROUP' || conv['type'] == 'DEPARTMENT') {
+        final iconCode = await storage.getGroupIcon(conv['id']);
+        if (iconCode != null) {
+          icons[conv['id']] = IconData(iconCode, fontFamily: 'MaterialIcons');
+        }
       }
     }
     if (mounted) {
       setState(() {
         _drafts.clear();
         _drafts.addAll(drafts);
+        _groupIcons.clear();
+        _groupIcons.addAll(icons);
       });
     }
   }
@@ -342,6 +352,13 @@ class _MessagingHubScreenState extends State<MessagingHubScreen>
                         }
                       }
                     }
+
+                    final isGroup =
+                        conv['type'] == 'GROUP' || conv['type'] == 'DEPARTMENT';
+                    if (isGroup && lastMsg['sender']['id'] != _currentUserId) {
+                      final senderName = lastMsg['sender']['first_name'];
+                      displayText = "$senderName: $displayText";
+                    }
                   }
 
                   return ListTile(
@@ -354,14 +371,23 @@ class _MessagingHubScreenState extends State<MessagingHubScreen>
                       backgroundColor: theme.colorScheme.primary.withValues(
                         alpha: 0.1,
                       ),
-                      child: Text(
-                        title[0].toUpperCase(),
-                        style: TextStyle(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 20,
-                        ),
-                      ),
+                      child:
+                          (conv['type'] == 'GROUP' ||
+                                  conv['type'] == 'DEPARTMENT') &&
+                              _groupIcons.containsKey(conv['id'])
+                          ? Icon(
+                              _groupIcons[conv['id']],
+                              color: theme.colorScheme.primary,
+                              size: 24,
+                            )
+                          : Text(
+                              title[0].toUpperCase(),
+                              style: TextStyle(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 20,
+                              ),
+                            ),
                     ),
                     title: Text(
                       title,
