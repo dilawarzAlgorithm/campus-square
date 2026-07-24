@@ -34,4 +34,32 @@ class SecureStorageService {
     await _storage.delete(key: _refreshTokenKey);
     await _storage.delete(key: _userProfileKey);
   }
+
+  Future<void> saveFailedMessages(
+    String conversationId,
+    List<dynamic> messages,
+  ) async {
+    await _storage.write(
+      key: 'FAILED_MSG_$conversationId',
+      value: jsonEncode(messages),
+    );
+  }
+
+  Future<List<dynamic>> getFailedMessages(String conversationId) async {
+    final data = await _storage.read(key: 'FAILED_MSG_$conversationId');
+    if (data == null) return [];
+    return jsonDecode(data);
+  }
+
+  Future<void> saveDraftMessage(String conversationId, String text) async {
+    await _storage.write(key: 'DRAFT_$conversationId', value: text);
+  }
+
+  Future<String?> getDraftMessage(String conversationId) async {
+    return await _storage.read(key: 'DRAFT_$conversationId');
+  }
+
+  Future<void> clearDraftMessage(String conversationId) async {
+    await _storage.delete(key: 'DRAFT_$conversationId');
+  }
 }
