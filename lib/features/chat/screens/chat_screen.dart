@@ -67,6 +67,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   bool _isParticipantBlocked = false;
 
+  bool _isSearching = false;
+  String _searchQuery = "";
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+
   @override
   void initState() {
     super.initState();
@@ -806,6 +811,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _scrollToMessage(String msgId) async {
+    await Future.delayed(const Duration(milliseconds: 100));
+
     final targetIndex = _messages.indexWhere(
       (m) => (m['id'] ?? m['local_id']) == msgId,
     );
@@ -976,6 +983,128 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  String _stripAttachmentTags(String rawContent) {
+    final regex = RegExp(
+      r'^\[ATTACHMENT\|([^\|]+)\|([^\|]+)\|([^\]]+)\]\n?(.*)',
+      dotAll: true,
+    );
+    final match = regex.firstMatch(rawContent);
+    if (match != null) {
+      return match.group(4) ?? '';
+    }
+    return rawContent;
+  }
+
+  Widget _buildSearchResults() {
+    final query = _searchQuery.trim().toLowerCase();
+    final results = _messages.where((m) {
+      final cleanContent = _stripAttachmentTags(
+        m['content']?.toString() ?? '',
+      ).toLowerCase();
+      return cleanContent.contains(query);
+    }).toList();
+
+    if (results.isEmpty) {
+      return Center(
+        child: Text(
+          'No messages found for "$_searchQuery"',
+          style: const TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: results.length,
+      itemBuilder: (context, index) {
+        final msg = results[index];
+        final cleanContent = _stripAttachmentTags(
+          msg['content']?.toString() ?? '',
+        );
+        final isMe = msg['sender']['id'] == _currentUserId;
+
+        final lowerContent = cleanContent.toLowerCase();
+        final startIndex = lowerContent.indexOf(query);
+
+        Widget contentWidget = Text(
+          cleanContent,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        );
+
+        if (startIndex != -1 && query.isNotEmpty) {
+          contentWidget = RichText(
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            text: TextSpan(
+              style: const TextStyle(color: Colors.grey, fontSize: 13),
+              children: [
+                TextSpan(text: cleanContent.substring(0, startIndex)),
+                TextSpan(
+                  text: cleanContent.substring(
+                    startIndex,
+                    startIndex + query.length,
+                  ),
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                    backgroundColor: Color(0xFFFFF59D),
+                  ),
+                ),
+                TextSpan(
+                  text: cleanContent.substring(startIndex + query.length),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListTile(
+          leading: CircleAvatar(
+            backgroundColor: Theme.of(
+              context,
+            ).colorScheme.primary.withValues(alpha: 0.1),
+            child: Text(
+              msg['sender']['first_name'][0].toUpperCase(),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.primary,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                isMe ? 'You' : msg['sender']['first_name'],
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+              Text(
+                '${_formatDateSeparator(DateTime.parse(msg['created_at']))}, ${_formatMessageTime(msg['created_at'])}',
+                style: const TextStyle(color: Colors.grey, fontSize: 10),
+              ),
+            ],
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 4.0),
+            child: contentWidget,
+          ),
+          onTap: () {
+            setState(() {
+              _isSearching = false;
+              _searchQuery = "";
+              _searchController.clear();
+            });
+            _scrollToMessage(msg['id'] ?? msg['local_id']);
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildReplyPreviewWidget(String rawContent, Color textColor) {
     String text = rawContent;
     IconData? icon;
@@ -1059,6 +1188,8 @@ class _ChatScreenState extends State<ChatScreen> {
     _channel?.sink.close();
     _typingTimer?.cancel();
     _messageController.dispose();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     _scrollController.removeListener(_scrollListener);
     _scrollController.dispose();
     super.dispose();
@@ -1070,127 +1201,173 @@ class _ChatScreenState extends State<ChatScreen> {
     final inSelectionMode = _selectedMessageIds.isNotEmpty;
 
     return Scaffold(
-      appBar: AppBar(
-        leading: inSelectionMode
-            ? IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => setState(() => _selectedMessageIds.clear()),
-              )
-            : null,
-        title: inSelectionMode
-            ? Text(
-                '${_selectedMessageIds.length}',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              )
-            : GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ChatDetailsScreen(
-                        conversationId: widget.conversationId,
-                        chatTitle: widget.chatTitle,
-                        isGroup: widget.isGroup,
-                      ),
-                    ),
-                  );
-                },
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text(
-                      widget.chatTitle,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
-                    ),
-                    if (!widget.isGroup)
-                      Text(
-                        _isOnline
-                            ? "Online"
-                            : (_lastSeen != null
-                                  ? "Last seen ${_formatLastSeen(_lastSeen!)}"
-                                  : "Offline"),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: _isOnline
-                              ? Colors.greenAccent
-                              : Colors.white70,
-                          fontWeight: FontWeight.normal,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-        actions: [
-          if (inSelectionMode) ...[
-            if (_selectedMessageIds.length == 1) ...[
-              Builder(
-                builder: (context) {
-                  final id = _selectedMessageIds.first;
-                  final msg = _messages.firstWhere(
-                    (m) => (m['id'] ?? m['local_id']) == id,
-                  );
-                  if (msg['sender']['id'] == _currentUserId &&
-                      _isWithin15Minutes(msg['created_at'])) {
-                    return IconButton(
-                      icon: const Icon(Icons.edit),
-                      tooltip: 'Edit Message',
-                      onPressed: () {
-                        setState(() {
-                          _editingMessage = msg;
-                          _messageController.text = msg['content'];
-                          _selectedMessageIds.clear();
-                        });
-                      },
-                    );
-                  }
-                  return const SizedBox.shrink();
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.reply),
-                tooltip: 'Reply',
+      appBar: _isSearching
+          ? AppBar(
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
                 onPressed: () {
-                  final id = _selectedMessageIds.first;
                   setState(() {
-                    _replyingTo = _messages.firstWhere(
-                      (m) => (m['id'] ?? m['local_id']) == id,
-                    );
-                    _selectedMessageIds.clear();
+                    _isSearching = false;
+                    _searchQuery = "";
+                    _searchController.clear();
                   });
                 },
               ),
-            ],
-            IconButton(
-              icon: const Icon(Icons.share),
-              tooltip: 'Share',
-              onPressed: _shareSelected,
+              title: TextField(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
+                autofocus: true,
+                textInputAction: TextInputAction.search,
+                decoration: const InputDecoration(
+                  hintText: "Search messages...",
+                  border: InputBorder.none,
+                ),
+                onChanged: (val) => setState(() => _searchQuery = val),
+              ),
+              actions: [
+                if (_searchQuery.isNotEmpty)
+                  IconButton(
+                    icon: const Icon(Icons.clear),
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() => _searchQuery = "");
+                    },
+                  ),
+              ],
+            )
+          : AppBar(
+              leading: inSelectionMode
+                  ? IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () =>
+                          setState(() => _selectedMessageIds.clear()),
+                    )
+                  : null,
+              title: inSelectionMode
+                  ? Text(
+                      '${_selectedMessageIds.length}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    )
+                  : GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ChatDetailsScreen(
+                              conversationId: widget.conversationId,
+                              chatTitle: widget.chatTitle,
+                              isGroup: widget.isGroup,
+                            ),
+                          ),
+                        );
+                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            widget.chatTitle,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                            ),
+                          ),
+                          if (!widget.isGroup)
+                            Text(
+                              _isOnline
+                                  ? "Online"
+                                  : (_lastSeen != null
+                                        ? "Last seen ${_formatLastSeen(_lastSeen!)}"
+                                        : "Offline"),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: _isOnline
+                                    ? Colors.greenAccent
+                                    : Colors.white70,
+                                fontWeight: FontWeight.normal,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+              actions: [
+                if (inSelectionMode) ...[
+                  if (_selectedMessageIds.length == 1) ...[
+                    Builder(
+                      builder: (context) {
+                        final id = _selectedMessageIds.first;
+                        final msg = _messages.firstWhere(
+                          (m) => (m['id'] ?? m['local_id']) == id,
+                        );
+                        if (msg['sender']['id'] == _currentUserId &&
+                            _isWithin15Minutes(msg['created_at'])) {
+                          return IconButton(
+                            icon: const Icon(Icons.edit),
+                            tooltip: 'Edit Message',
+                            onPressed: () {
+                              setState(() {
+                                _editingMessage = msg;
+                                _messageController.text = msg['content'];
+                                _selectedMessageIds.clear();
+                              });
+                            },
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.reply),
+                      tooltip: 'Reply',
+                      onPressed: () {
+                        final id = _selectedMessageIds.first;
+                        setState(() {
+                          _replyingTo = _messages.firstWhere(
+                            (m) => (m['id'] ?? m['local_id']) == id,
+                          );
+                          _selectedMessageIds.clear();
+                        });
+                      },
+                    ),
+                  ],
+                  IconButton(
+                    icon: const Icon(Icons.share),
+                    tooltip: 'Share',
+                    onPressed: _shareSelected,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.copy),
+                    tooltip: 'Copy',
+                    onPressed: _copySelected,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.turn_right_outlined),
+                    tooltip: 'Forward',
+                    onPressed: _forwardSelected,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete),
+                    tooltip: 'Delete',
+                    onPressed: _showDeleteDialog,
+                  ),
+                ] else ...[
+                  IconButton(
+                    icon: const Icon(Icons.search),
+                    tooltip: 'Search',
+                    onPressed: () {
+                      setState(() {
+                        _isSearching = true;
+                      });
+                      _searchFocusNode.requestFocus();
+                    },
+                  ),
+                  if (!_isConnected && !_isLoading)
+                    const Padding(
+                      padding: EdgeInsets.only(right: 16.0),
+                      child: Icon(Icons.wifi_off, color: Colors.red, size: 20),
+                    ),
+                ],
+              ],
             ),
-            IconButton(
-              icon: const Icon(Icons.copy),
-              tooltip: 'Copy',
-              onPressed: _copySelected,
-            ),
-            IconButton(
-              icon: const Icon(Icons.turn_right_outlined),
-              tooltip: 'Forward',
-              onPressed: _forwardSelected,
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete),
-              tooltip: 'Delete',
-              onPressed: _showDeleteDialog,
-            ),
-          ] else if (!_isConnected && !_isLoading) ...[
-            const Padding(
-              padding: EdgeInsets.only(right: 16.0),
-              child: Icon(Icons.wifi_off, color: Colors.red, size: 20),
-            ),
-          ],
-        ],
-      ),
       body: Stack(
         children: [
           Column(
@@ -1212,7 +1389,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
 
               Expanded(
-                child: _isLoading
+                child: _isSearching
+                    ? _buildSearchResults()
+                    : _isLoading
                     ? const Center(child: CircularProgressIndicator())
                     : ListView.builder(
                         controller: _scrollController,
@@ -1582,238 +1761,239 @@ class _ChatScreenState extends State<ChatScreen> {
                         },
                       ),
               ),
-
-              if (_replyingTo != null || _editingMessage != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  color: Colors.grey.shade100,
-                  child: Row(
-                    children: [
-                      Icon(
-                        _editingMessage != null ? Icons.edit : Icons.reply,
-                        color: Colors.grey,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _editingMessage != null
-                                  ? "Editing message"
-                                  : "Replying to ${_replyingTo!['sender']['first_name']}",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                                color: theme.colorScheme.primary,
-                              ),
-                            ),
-                            _buildReplyPreviewWidget(
-                              _editingMessage != null
-                                  ? _editingMessage!['content']
-                                  : _replyingTo!['content'],
-                              Colors.grey,
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 20),
-                        onPressed: () {
-                          setState(() {
-                            _replyingTo = null;
-                            if (_editingMessage != null) {
-                              _editingMessage = null;
-                              _messageController.clear();
-                            }
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-
-              if (_isParticipantBlocked)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 24,
-                    horizontal: 16,
-                  ),
-                  color: Colors.red.shade50,
-                  width: double.infinity,
-                  child: const Text(
-                    "You have been blocked from sending messages to this chat.",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.red,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
+              if (!_isSearching) ...[
+                if (_replyingTo != null || _editingMessage != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
                     ),
-                  ),
-                )
-              else
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.cardColor,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, -2),
-                      ),
-                    ],
-                  ),
-                  child: SafeArea(
-                    child: Column(
+                    color: Colors.grey.shade100,
+                    child: Row(
                       children: [
-                        if (_selectedAttachment != null)
-                          Container(
-                            margin: const EdgeInsets.only(
-                              bottom: 12,
-                              left: 8,
-                              right: 8,
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.surfaceContainerHighest
-                                  .withValues(alpha: 0.5),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.grey.shade300),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  [
-                                        'jpg',
-                                        'jpeg',
-                                        'png',
-                                        'gif',
-                                        'webp',
-                                      ].contains(
-                                        _selectedAttachment!.extension
-                                            ?.toLowerCase(),
-                                      )
-                                      ? Icons.image
-                                      : Icons.insert_drive_file,
+                        Icon(
+                          _editingMessage != null ? Icons.edit : Icons.reply,
+                          color: Colors.grey,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _editingMessage != null
+                                    ? "Editing message"
+                                    : "Replying to ${_replyingTo!['sender']['first_name']}",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
                                   color: theme.colorScheme.primary,
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    _selectedAttachment!.name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.close,
-                                    size: 20,
-                                    color: Colors.grey,
-                                  ),
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(),
-                                  onPressed: () => setState(
-                                    () => _selectedAttachment = null,
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                              _buildReplyPreviewWidget(
+                                _editingMessage != null
+                                    ? _editingMessage!['content']
+                                    : _replyingTo!['content'],
+                                Colors.grey,
+                              ),
+                            ],
                           ),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            IconButton(
-                              icon: const Icon(
-                                Icons.add,
-                                color: Colors.blueGrey,
-                              ),
-                              onPressed: _showAttachmentOptions,
-                            ),
-                            Expanded(
-                              child: TextField(
-                                controller: _messageController,
-                                textCapitalization:
-                                    TextCapitalization.sentences,
-                                onChanged: _onTyping,
-                                keyboardType: TextInputType.multiline,
-                                minLines: 1,
-                                maxLines: 5,
-                                decoration: InputDecoration(
-                                  hintText: "Message...",
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(24),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  filled: true,
-                                  fillColor: theme
-                                      .colorScheme
-                                      .surfaceContainerHighest
-                                      .withValues(alpha: 0.5),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                    vertical: 12,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                bottom: 2.0,
-                                right: 8.0,
-                              ),
-                              child: _isUploadingAttachment
-                                  ? const Padding(
-                                      padding: EdgeInsets.all(12.0),
-                                      child: SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      ),
-                                    )
-                                  : CircleAvatar(
-                                      backgroundColor:
-                                          theme.colorScheme.primary,
-                                      radius: 22,
-                                      child: IconButton(
-                                        icon: Icon(
-                                          _editingMessage != null
-                                              ? Icons.check
-                                              : Icons.send,
-                                          color: Colors.white,
-                                          size: 20,
-                                        ),
-                                        onPressed: _sendMessage,
-                                      ),
-                                    ),
-                            ),
-                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 20),
+                          onPressed: () {
+                            setState(() {
+                              _replyingTo = null;
+                              if (_editingMessage != null) {
+                                _editingMessage = null;
+                                _messageController.clear();
+                              }
+                            });
+                          },
                         ),
                       ],
                     ),
                   ),
-                ),
+
+                if (_isParticipantBlocked)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 24,
+                      horizontal: 16,
+                    ),
+                    color: Colors.red.shade50,
+                    width: double.infinity,
+                    child: const Text(
+                      "You have been blocked from sending messages to this chat.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.cardColor,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, -2),
+                        ),
+                      ],
+                    ),
+                    child: SafeArea(
+                      child: Column(
+                        children: [
+                          if (_selectedAttachment != null)
+                            Container(
+                              margin: const EdgeInsets.only(
+                                bottom: 12,
+                                left: 8,
+                                right: 8,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.surfaceContainerHighest
+                                    .withValues(alpha: 0.5),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.grey.shade300),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    [
+                                          'jpg',
+                                          'jpeg',
+                                          'png',
+                                          'gif',
+                                          'webp',
+                                        ].contains(
+                                          _selectedAttachment!.extension
+                                              ?.toLowerCase(),
+                                        )
+                                        ? Icons.image
+                                        : Icons.insert_drive_file,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      _selectedAttachment!.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.close,
+                                      size: 20,
+                                      color: Colors.grey,
+                                    ),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    onPressed: () => setState(
+                                      () => _selectedAttachment = null,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.add,
+                                  color: Colors.blueGrey,
+                                ),
+                                onPressed: _showAttachmentOptions,
+                              ),
+                              Expanded(
+                                child: TextField(
+                                  controller: _messageController,
+                                  textCapitalization:
+                                      TextCapitalization.sentences,
+                                  onChanged: _onTyping,
+                                  keyboardType: TextInputType.multiline,
+                                  minLines: 1,
+                                  maxLines: 5,
+                                  decoration: InputDecoration(
+                                    hintText: "Message...",
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(24),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    filled: true,
+                                    fillColor: theme
+                                        .colorScheme
+                                        .surfaceContainerHighest
+                                        .withValues(alpha: 0.5),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                      vertical: 12,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: 2.0,
+                                  right: 8.0,
+                                ),
+                                child: _isUploadingAttachment
+                                    ? const Padding(
+                                        padding: EdgeInsets.all(12.0),
+                                        child: SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        ),
+                                      )
+                                    : CircleAvatar(
+                                        backgroundColor:
+                                            theme.colorScheme.primary,
+                                        radius: 22,
+                                        child: IconButton(
+                                          icon: Icon(
+                                            _editingMessage != null
+                                                ? Icons.check
+                                                : Icons.send,
+                                            color: Colors.white,
+                                            size: 20,
+                                          ),
+                                          onPressed: _sendMessage,
+                                        ),
+                                      ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
             ],
           ),
-          if (_showScrollToBottom)
+          if (_showScrollToBottom && !_isSearching)
             Positioned(
               bottom: 110,
               right: 16,
