@@ -132,7 +132,9 @@ class _AdminPanelTabState extends State<_AdminPanelTab> {
                     Text(
                       'Manage all registered institutions and platform-wide settings.',
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: Colors.black87,
+                        color: theme.textTheme.bodyMedium?.color?.withValues(
+                          alpha: 0.8,
+                        ),
                       ),
                     ),
                   ],
@@ -141,7 +143,6 @@ class _AdminPanelTabState extends State<_AdminPanelTab> {
             ],
           ),
         ),
-
         if (_isLoading)
           const Center(child: CircularProgressIndicator())
         else if (_metrics != null)
@@ -179,9 +180,7 @@ class _AdminPanelTabState extends State<_AdminPanelTab> {
               ),
             ],
           ),
-
         const SizedBox(height: 24),
-
         _buildAdminCard(
           context,
           'Global Broadcast',
@@ -221,7 +220,9 @@ class _AdminPanelTabState extends State<_AdminPanelTab> {
   ) {
     return Card(
       elevation: 0,
-      color: Colors.grey.shade100,
+      color: Theme.of(
+        context,
+      ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
@@ -331,7 +332,9 @@ class _AdminPanelTabState extends State<_AdminPanelTab> {
                             bodyController.text.trim().isEmpty) {
                           return;
                         }
+
                         setDialogState(() => isSubmitting = true);
+
                         try {
                           final auth = context.read<CampusSquareAuth>();
                           final client = ApiClient(baseUrl: auth.baseUrl);
@@ -344,6 +347,7 @@ class _AdminPanelTabState extends State<_AdminPanelTab> {
                               "body": bodyController.text.trim(),
                             }),
                           );
+
                           if (context.mounted) {
                             Navigator.pop(ctx);
                             if (response.statusCode == 200) {
