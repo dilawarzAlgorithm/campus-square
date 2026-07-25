@@ -2192,7 +2192,7 @@ class _ExpandableMessageTextState extends State<ExpandableMessageText> {
           clipBehavior: Clip.antiAlias,
           child: isImage
               ? Container(
-                  height: 200, // Fixed height constraint
+                  height: 200,
                   width: double.infinity,
                   color: widget.isMe
                       ? Colors.white.withValues(alpha: 0.1)
@@ -2469,23 +2469,40 @@ class ChatDetailsScreen extends StatefulWidget {
 
 class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
   bool _isLoading = true;
-  bool _isMuted = false;
   List<dynamic> _participants = [];
   IconData _groupIcon = Icons.group;
 
   final List<IconData> _availableIcons = [
-    Icons.group,
-    Icons.school,
-    Icons.work,
+    Icons.computer,
+    Icons.memory,
+    Icons.engineering,
+    Icons.architecture,
+    Icons.electrical_services,
+    Icons.precision_manufacturing,
+    Icons.biotech,
     Icons.science,
-    Icons.sports_esports,
-    Icons.sports_basketball,
-    Icons.library_books,
-    Icons.campaign,
+    Icons.calculate,
+    Icons.functions,
+    Icons.account_balance,
+    Icons.gavel,
+    Icons.medical_services,
+    Icons.psychology,
+    Icons.menu_book,
+    Icons.public,
+    Icons.language,
+    Icons.terminal,
     Icons.emoji_events,
-    Icons.local_cafe,
-    Icons.music_note,
+    Icons.groups,
+    Icons.campaign,
     Icons.palette,
+    Icons.brush,
+    Icons.camera_alt,
+    Icons.videocam,
+    Icons.music_note,
+    Icons.sports_soccer,
+    Icons.volunteer_activism,
+    Icons.rocket_launch,
+    Icons.school,
   ];
 
   @override
@@ -2731,14 +2748,14 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 16),
-                SwitchListTile(
-                  secondary: const Icon(Icons.notifications_off_outlined),
-                  title: const Text('Mute Notifications'),
-                  subtitle: const Text('Do not disturb for this chat'),
-                  value: _isMuted,
-                  onChanged: (val) => setState(() => _isMuted = val),
-                  activeThumbColor: theme.colorScheme.primary,
-                ),
+                // SwitchListTile(
+                //   secondary: const Icon(Icons.notifications_off_outlined),
+                //   title: const Text('Mute Notifications'),
+                //   subtitle: const Text('Do not disturb for this chat'),
+                //   value: _isMuted,
+                //   onChanged: (val) => setState(() => _isMuted = val),
+                //   activeThumbColor: theme.colorScheme.primary,
+                // ),
                 ListTile(
                   leading: const Icon(Icons.photo_library_outlined),
                   title: const Text('Media, Links & Documents'),
