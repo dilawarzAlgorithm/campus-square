@@ -184,6 +184,13 @@ class _AdminPanelTabState extends State<_AdminPanelTab> {
 
         _buildAdminCard(
           context,
+          'Global Broadcast',
+          Icons.campaign,
+          'Send an urgent push notification to every user.',
+          () => _showBroadcastDialog(context),
+        ),
+        _buildAdminCard(
+          context,
           'Manage Institutions',
           Icons.business,
           'Provision, edit, or block campuses.',
@@ -260,6 +267,127 @@ class _AdminPanelTabState extends State<_AdminPanelTab> {
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.chevron_right, color: Colors.grey),
         onTap: onTap,
+      ),
+    );
+  }
+
+  void _showBroadcastDialog(BuildContext context) {
+    final titleController = TextEditingController();
+    final bodyController = TextEditingController();
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.campaign, color: Colors.red),
+                SizedBox(width: 8),
+                Text('Global Broadcast'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'This will send a push notification to EVERY user registered on Campus Square, overriding their mute settings. Use with extreme caution.',
+                  style: TextStyle(fontSize: 13, color: Colors.grey),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(
+                    labelText: 'Broadcast Title',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: bodyController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Message Body',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: isSubmitting
+                    ? null
+                    : () async {
+                        if (titleController.text.trim().isEmpty ||
+                            bodyController.text.trim().isEmpty) {
+                          return;
+                        }
+                        setDialogState(() => isSubmitting = true);
+                        try {
+                          final auth = context.read<CampusSquareAuth>();
+                          final client = ApiClient(baseUrl: auth.baseUrl);
+                          final response = await client.authenticatedRequest(
+                            context,
+                            "/api/notifications/broadcast",
+                            method: "POST",
+                            body: jsonEncode({
+                              "title": titleController.text.trim(),
+                              "body": bodyController.text.trim(),
+                            }),
+                          );
+                          if (context.mounted) {
+                            Navigator.pop(ctx);
+                            if (response.statusCode == 200) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Broadcast sent successfully!'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Failed to send broadcast.'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Error: $e'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        }
+                      },
+                child: isSubmitting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Text('Send Broadcast'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

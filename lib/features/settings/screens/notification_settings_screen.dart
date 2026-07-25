@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:campus_square/features/auth/controllers/auth_provider.dart';
+import 'package:campus_square/core/theme/theme_provider.dart';
 
 class NotificationSettingsScreen extends StatefulWidget {
   const NotificationSettingsScreen({super.key});
@@ -69,11 +72,55 @@ class _NotificationSettingsScreenState
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    final themeProvider = context.watch<ThemeProvider>();
+    final isCurrentlyDark =
+        themeProvider.themeMode == ThemeMode.dark ||
+        (themeProvider.themeMode == ThemeMode.system &&
+            MediaQuery.of(context).platformBrightness == Brightness.dark);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Notification Settings')),
+      appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text(
+              'APPEARANCE',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ),
+          SwitchListTile(
+            title: const Text(
+              'Dark Mode',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: const Text('Toggle dark theme on or off'),
+            secondary: const Icon(Icons.dark_mode_outlined),
+            value: isCurrentlyDark,
+            onChanged: (bool value) {
+              themeProvider.toggleTheme(value);
+            },
+          ),
+          const SizedBox(height: 16),
+          const Divider(),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Text(
+              'NOTIFICATIONS',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -124,6 +171,12 @@ class _NotificationSettingsScreenState
               await _savePreference('fcm_important_notices', _importantNotices);
               await _savePreference('fcm_resources', _resources);
               _syncAllTopics();
+
+              if (context.mounted) {
+                context.read<CampusSquareAuth>().updateFCMTokenStatus(
+                  value ? _messageHub : false,
+                );
+              }
             },
           ),
           const Divider(),
@@ -136,6 +189,12 @@ class _NotificationSettingsScreenState
                     setState(() => _messageHub = value);
                     await _savePreference('fcm_message_hub', value);
                     _handleTopic('message_hub', value);
+
+                    if (context.mounted) {
+                      context.read<CampusSquareAuth>().updateFCMTokenStatus(
+                        value,
+                      );
+                    }
                   }
                 : null,
           ),

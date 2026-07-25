@@ -313,6 +313,19 @@ class _MessagingHubScreenState extends State<MessagingHubScreen>
                   final isTyping = _typingStatus[conv['id']] == true;
                   final draftText = _drafts[conv['id']];
 
+                  bool isStaffDM = false;
+                  if (conv['type'] == 'DM') {
+                    final participants = conv['participants'] as List<dynamic>;
+                    final other = participants.firstWhere(
+                      (p) => p['user']['id'] != _currentUserId,
+                      orElse: () => participants.first,
+                    );
+                    final role = other['user']['role'];
+                    if (role == 'ADMIN' || role == 'COMMUNITY_HEAD') {
+                      isStaffDM = true;
+                    }
+                  }
+
                   String displayText = "";
                   IconData? attachmentIcon;
 
@@ -389,14 +402,30 @@ class _MessagingHubScreenState extends State<MessagingHubScreen>
                               ),
                             ),
                     ),
-                    title: Text(
-                      title,
-                      style: TextStyle(
-                        fontWeight: hasUnread
-                            ? FontWeight.w900
-                            : FontWeight.bold,
-                        fontSize: 16,
-                      ),
+                    title: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            style: TextStyle(
+                              fontWeight: hasUnread
+                                  ? FontWeight.w900
+                                  : FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (isStaffDM) ...[
+                          const SizedBox(width: 4),
+                          const Icon(
+                            Icons.verified,
+                            color: Colors.blue,
+                            size: 16,
+                          ),
+                        ],
+                      ],
                     ),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

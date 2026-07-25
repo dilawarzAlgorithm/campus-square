@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:campus_square/core/services/secure_storage_service.dart';
 
 enum ApplicationState { initializing, unauthenticated, authenticated }
@@ -47,10 +49,38 @@ class CampusSquareAuth extends ChangeNotifier {
     if (refreshToken != null && profile != null) {
       _user = profile;
       _status = ApplicationState.authenticated;
+
+      final prefs = await SharedPreferences.getInstance();
+      final isMessageEnabled = prefs.getBool('fcm_message_hub') ?? true;
+      final allEnabled = prefs.getBool('fcm_all_notifications') ?? true;
+      await updateFCMTokenStatus(allEnabled && isMessageEnabled);
     } else {
       _status = ApplicationState.unauthenticated;
     }
     notifyListeners();
+  }
+
+  Future<void> updateFCMTokenStatus(bool isEnabled) async {
+    try {
+      final accessToken = await _storage.getAccessToken();
+      if (accessToken == null) return;
+
+      String? tokenToSend;
+      if (isEnabled) {
+        tokenToSend = await FirebaseMessaging.instance.getToken();
+      }
+
+      await http.patch(
+        Uri.parse("$baseUrl/api/auth/fcm-token"),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $accessToken",
+        },
+        body: jsonEncode({"token": tokenToSend}),
+      );
+    } catch (e) {
+      debugPrint("Failed to update FCM token status: $e");
+    }
   }
 
   Future<RegistrationResult> register({
@@ -158,6 +188,12 @@ class CampusSquareAuth extends ChangeNotifier {
         );
         _user = data["user"];
         _status = ApplicationState.authenticated;
+
+        final prefs = await SharedPreferences.getInstance();
+        final isMessageEnabled = prefs.getBool('fcm_message_hub') ?? true;
+        final allEnabled = prefs.getBool('fcm_all_notifications') ?? true;
+        await updateFCMTokenStatus(allEnabled && isMessageEnabled);
+
         notifyListeners();
         return true;
       } else {
@@ -192,6 +228,12 @@ class CampusSquareAuth extends ChangeNotifier {
         );
         _user = data["user"];
         _status = ApplicationState.authenticated;
+
+        final prefs = await SharedPreferences.getInstance();
+        final isMessageEnabled = prefs.getBool('fcm_message_hub') ?? true;
+        final allEnabled = prefs.getBool('fcm_all_notifications') ?? true;
+        await updateFCMTokenStatus(allEnabled && isMessageEnabled);
+
         notifyListeners();
         return AuthResult(success: true, message: "Logged in successfully.");
       } else {

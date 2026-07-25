@@ -1286,7 +1286,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 fontSize: 12,
                                 color: _isOnline
                                     ? Colors.greenAccent
-                                    : Colors.white70,
+                                    : const Color.fromARGB(179, 129, 128, 128),
                                 fontWeight: FontWeight.normal,
                               ),
                             ),

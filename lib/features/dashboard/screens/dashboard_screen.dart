@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:provider/provider.dart';
 import 'package:campus_square/core/network/api_client.dart';
+import 'package:campus_square/core/services/notification_service.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 import 'package:campus_square/features/vault/screens/vault_screen.dart';
 import 'package:campus_square/features/profile/screens/profile_screen.dart';
@@ -73,9 +74,24 @@ class _DashboardState extends State<Dashboard> {
         centerTitle: false,
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_none_rounded),
+            icon: Badge(
+              isLabelVisible:
+                  context.watch<NotificationProvider>().unreadCount > 0,
+              label: Text(
+                context.watch<NotificationProvider>().unreadCount.toString(),
+              ),
+              child: const Icon(Icons.notifications_none_rounded),
+            ),
             onPressed: () {
-              // TODO: Open Notifications Sheet
+              context.read<NotificationProvider>().markAllAsRead();
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                builder: (ctx) => const NotificationHistorySheet(),
+              );
             },
           ),
           IconButton(

@@ -4,6 +4,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'package:campus_square/core/theme/app_theme.dart';
+import 'package:campus_square/core/theme/theme_provider.dart';
+import 'package:campus_square/core/services/notification_service.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 import 'package:campus_square/shared/widgets/auth_route_guard.dart';
 
@@ -14,8 +16,14 @@ Future<void> main() async {
   await Firebase.initializeApp();
 
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => CampusSquareAuth(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => CampusSquareAuth()),
+        ChangeNotifierProvider(
+          create: (_) => NotificationProvider()..initialize(),
+        ),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()..initialize()),
+      ],
       child: const CampusSquareApp(),
     ),
   );
@@ -26,11 +34,13 @@ class CampusSquareApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+
     return MaterialApp(
       title: 'Campus Square',
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system,
+      themeMode: themeProvider.themeMode,
       debugShowCheckedModeBanner: false,
       home: const AuthRouteGuard(),
     );

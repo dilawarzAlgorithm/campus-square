@@ -4,7 +4,6 @@ class AppTheme {
   static const Color primaryColor = Color(0xFF4F46E5);
   static const Color secondaryColor = Color(0xFF10B981);
 
-  // --- Light Theme ---
   static final ThemeData lightTheme = ThemeData(
     brightness: Brightness.light,
     scaffoldBackgroundColor: const Color(0xFFF8FAFC),
@@ -29,7 +28,6 @@ class AppTheme {
     ),
   );
 
-  // --- Dark Theme ---
   static final ThemeData darkTheme = ThemeData(
     brightness: Brightness.dark,
     scaffoldBackgroundColor: const Color(0xFF121212),
