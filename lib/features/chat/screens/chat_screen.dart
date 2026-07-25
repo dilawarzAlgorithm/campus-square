@@ -346,6 +346,8 @@ class _ChatScreenState extends State<ChatScreen> {
       SecureStorageService().saveDraftMessage(widget.conversationId, value);
     }
 
+    setState(() {});
+
     if (_channel == null || !_isConnected || _isDisposing) return;
 
     _channel!.sink.add(jsonEncode({"type": "typing", "is_typing": isTyping}));
@@ -462,6 +464,8 @@ class _ChatScreenState extends State<ChatScreen> {
     final file = _selectedAttachment;
 
     if (text.isEmpty && file == null) return;
+
+    HapticFeedback.lightImpact();
 
     if (_editingMessage != null) {
       final payload = {
@@ -1530,6 +1534,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   onTap: () {
                                     if (inSelectionMode) {
                                       if (isDeleted) return;
+                                      HapticFeedback.selectionClick();
                                       setState(() {
                                         if (isSelected) {
                                           _selectedMessageIds.remove(msgId);
@@ -1567,10 +1572,19 @@ class _ChatScreenState extends State<ChatScreen> {
                                           right: 16,
                                         ),
                                         padding: const EdgeInsets.symmetric(
-                                          horizontal: 14,
-                                          vertical: 10,
+                                          horizontal: 16,
+                                          vertical: 12,
                                         ),
                                         decoration: BoxDecoration(
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withValues(
+                                                alpha: 0.04,
+                                              ),
+                                              blurRadius: 4,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
                                           color: isDeleted
                                               ? theme
                                                     .colorScheme
@@ -1585,22 +1599,22 @@ class _ChatScreenState extends State<ChatScreen> {
                                             topLeft: Radius.circular(
                                               !isMe
                                                   ? (isGroupedWithOlder
-                                                        ? 4
-                                                        : 16)
-                                                  : 16,
+                                                        ? 6
+                                                        : 20)
+                                                  : 20,
                                             ),
                                             topRight: Radius.circular(
                                               isMe
                                                   ? (isGroupedWithOlder
-                                                        ? 4
-                                                        : 16)
-                                                  : 16,
+                                                        ? 6
+                                                        : 20)
+                                                  : 20,
                                             ),
                                             bottomLeft: Radius.circular(
-                                              !isMe ? 4 : 16,
+                                              !isMe ? 6 : 20,
                                             ),
                                             bottomRight: Radius.circular(
-                                              isMe ? 4 : 16,
+                                              isMe ? 6 : 20,
                                             ),
                                           ),
                                         ),
@@ -1609,7 +1623,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                               MediaQuery.of(
                                                 context,
                                               ).size.width *
-                                              0.75,
+                                              0.80,
                                         ),
                                         child: Column(
                                           crossAxisAlignment:
@@ -1712,7 +1726,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                               isMe: isMe,
                                               isDeleted: isDeleted,
                                             ),
-                                            const SizedBox(height: 4),
+                                            const SizedBox(height: 6),
                                             Row(
                                               mainAxisSize: MainAxisSize.min,
                                               mainAxisAlignment:
@@ -1763,12 +1777,20 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               if (!_isSearching) ...[
                 if (_replyingTo != null || _editingMessage != null)
-                  Container(
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeInOut,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
-                      vertical: 8,
+                      vertical: 12,
                     ),
-                    color: Colors.grey.shade100,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest
+                          .withValues(alpha: 0.3),
+                      border: Border(
+                        top: BorderSide(color: Colors.grey.shade300),
+                      ),
+                    ),
                     child: Row(
                       children: [
                         Icon(
@@ -1844,9 +1866,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       color: theme.cardColor,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, -2),
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 16,
+                          offset: const Offset(0, -4),
                         ),
                       ],
                     ),
@@ -1917,71 +1939,106 @@ class _ChatScreenState extends State<ChatScreen> {
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.add,
-                                  color: Colors.blueGrey,
-                                ),
-                                onPressed: _showAttachmentOptions,
-                              ),
                               Expanded(
-                                child: TextField(
-                                  controller: _messageController,
-                                  textCapitalization:
-                                      TextCapitalization.sentences,
-                                  onChanged: _onTyping,
-                                  keyboardType: TextInputType.multiline,
-                                  minLines: 1,
-                                  maxLines: 5,
-                                  decoration: InputDecoration(
-                                    hintText: "Message...",
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(24),
-                                      borderSide: BorderSide.none,
-                                    ),
-                                    filled: true,
-                                    fillColor: theme
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: theme
                                         .colorScheme
                                         .surfaceContainerHighest
-                                        .withValues(alpha: 0.5),
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 20,
-                                      vertical: 12,
-                                    ),
+                                        .withValues(alpha: 0.4),
+                                    borderRadius: BorderRadius.circular(28),
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.add_circle_outline,
+                                          color: Colors.blueGrey,
+                                        ),
+                                        onPressed: () {
+                                          HapticFeedback.selectionClick();
+                                          _showAttachmentOptions();
+                                        },
+                                      ),
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _messageController,
+                                          textCapitalization:
+                                              TextCapitalization.sentences,
+                                          onChanged: _onTyping,
+                                          keyboardType: TextInputType.multiline,
+                                          minLines: 1,
+                                          maxLines: 5,
+                                          style: const TextStyle(fontSize: 16),
+                                          decoration: const InputDecoration(
+                                            hintText: "Message...",
+                                            border: InputBorder.none,
+                                            contentPadding:
+                                                EdgeInsets.symmetric(
+                                                  horizontal: 8,
+                                                  vertical: 14,
+                                                ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                  bottom: 2.0,
-                                  right: 8.0,
-                                ),
-                                child: _isUploadingAttachment
-                                    ? const Padding(
-                                        padding: EdgeInsets.all(12.0),
-                                        child: SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 200),
+                                transitionBuilder:
+                                    (
+                                      Widget child,
+                                      Animation<double> animation,
+                                    ) {
+                                      return ScaleTransition(
+                                        scale: animation,
+                                        child: child,
+                                      );
+                                    },
+                                child:
+                                    (_messageController.text
+                                            .trim()
+                                            .isNotEmpty ||
+                                        _selectedAttachment != null)
+                                    ? Padding(
+                                        key: const ValueKey('send_btn'),
+                                        padding: const EdgeInsets.only(
+                                          bottom: 2.0,
                                         ),
+                                        child: _isUploadingAttachment
+                                            ? const Padding(
+                                                padding: EdgeInsets.all(12.0),
+                                                child: SizedBox(
+                                                  width: 24,
+                                                  height: 24,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                        strokeWidth: 2.5,
+                                                      ),
+                                                ),
+                                              )
+                                            : CircleAvatar(
+                                                backgroundColor:
+                                                    theme.colorScheme.primary,
+                                                radius: 24,
+                                                child: IconButton(
+                                                  icon: Icon(
+                                                    _editingMessage != null
+                                                        ? Icons.check
+                                                        : Icons.send_rounded,
+                                                    color: Colors.white,
+                                                    size: 20,
+                                                  ),
+                                                  onPressed: _sendMessage,
+                                                ),
+                                              ),
                                       )
-                                    : CircleAvatar(
-                                        backgroundColor:
-                                            theme.colorScheme.primary,
-                                        radius: 22,
-                                        child: IconButton(
-                                          icon: Icon(
-                                            _editingMessage != null
-                                                ? Icons.check
-                                                : Icons.send,
-                                            color: Colors.white,
-                                            size: 20,
-                                          ),
-                                          onPressed: _sendMessage,
-                                        ),
+                                    : const SizedBox.shrink(
+                                        key: ValueKey('empty_btn'),
                                       ),
                               ),
                             ],

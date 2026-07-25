@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 import 'package:campus_square/features/vault/screens/saved_vault_screen.dart';
 import 'package:campus_square/features/profile/screens/full_profile_screen.dart';
+import 'package:campus_square/features/settings/screens/notification_settings_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -341,7 +342,15 @@ class ProfileScreen extends StatelessWidget {
                   leading: const Icon(Icons.settings_outlined),
                   title: const Text('Settings'),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            const NotificationSettingsScreen(),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import 'package:campus_square/core/theme/app_theme.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
@@ -8,8 +9,9 @@ import 'package:campus_square/shared/widgets/auth_route_guard.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await dotenv.load(fileName: ".env");
+
+  await Firebase.initializeApp();
 
   runApp(
     ChangeNotifierProvider(
