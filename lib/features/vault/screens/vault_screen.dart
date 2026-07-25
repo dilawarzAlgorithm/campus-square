@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
-
 import 'package:campus_square/core/network/api_client.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 
@@ -24,7 +23,6 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
   Set<String> _savedResourceIds = {};
 
   String? _selectedDeptId;
-
   String? _filterType;
   int? _filterSemester;
   String _sortBy = "upvotes"; // "upvotes" or "newest"
@@ -61,7 +59,6 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
           if (!mounted) return;
           final currentUser = context.read<CampusSquareAuth>().user;
           final userDeptId = currentUser?['department_id'];
-
           if (userDeptId != null &&
               _departments.any((d) => d['id'] == userDeptId)) {
             _selectedDeptId = userDeptId;
@@ -73,10 +70,8 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
 
       if (enumResponse.statusCode == 200) {
         final decodedEnums = jsonDecode(enumResponse.body);
-
         final resTypeMap = decodedEnums["ResourceType"]["values"] as Map;
         _resourceTypes = resTypeMap.values.map((e) => e.toString()).toList();
-
         final semMap = decodedEnums["Semester"]["values"] as Map;
         _semesters = semMap.values.map((e) => int.parse(e.toString())).toList();
       }
@@ -103,7 +98,6 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
 
   Future<void> _fetchResources() async {
     List<String> queryParams = [];
-
     if (_selectedDeptId != null) {
       queryParams.add("department_id=$_selectedDeptId");
     }
@@ -140,7 +134,6 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
         method: "POST",
         body: jsonEncode({"vote_type": voteType}),
       );
-
       if (response.statusCode == 200) {
         _fetchResources();
         if (mounted) {
@@ -154,6 +147,7 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
 
   Future<void> _toggleSaveResource(String resourceId) async {
     final isSaved = _savedResourceIds.contains(resourceId);
+
     setState(() {
       if (isSaved) {
         _savedResourceIds.remove(resourceId);
@@ -168,7 +162,6 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
         "/api/vault/resources/$resourceId/save",
         method: "POST",
       );
-
       if (response.statusCode != 200) {
         setState(() {
           if (isSaved) {
@@ -316,7 +309,6 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
               }
               Navigator.pop(ctx);
               setState(() => _isLoading = true);
-
               try {
                 final response = await _apiClient.authenticatedRequest(
                   context,
@@ -327,7 +319,6 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                     "code": codeController.text.trim().toUpperCase(),
                   }),
                 );
-
                 if (response.statusCode == 201) {
                   _fetchInitialData();
                 }
@@ -483,14 +474,12 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
   }) async {
     Uri url = Uri.parse(urlString);
     LaunchMode mode = LaunchMode.externalApplication;
-
     if (inAppPreview) {
       mode = LaunchMode.inAppBrowserView;
     }
 
     try {
       bool launched = await launchUrl(url, mode: mode);
-
       if (!launched) {
         launched = await launchUrl(url, mode: LaunchMode.platformDefault);
         if (!launched) {
@@ -536,7 +525,6 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-
                     const Text(
                       'Sort By',
                       style: TextStyle(
@@ -563,7 +551,6 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                       },
                     ),
                     const SizedBox(height: 16),
-
                     Row(
                       children: [
                         Expanded(
@@ -616,7 +603,6 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                       ],
                     ),
                     const SizedBox(height: 24),
-
                     Row(
                       children: [
                         Expanded(
@@ -641,6 +627,12 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                                 (_) => setState(() => _isLoading = false),
                               );
                             },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
+                              foregroundColor: Colors.white,
+                            ),
                             child: const Text('Apply Filters'),
                           ),
                         ),
@@ -719,7 +711,6 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
               ],
             ),
           ),
-
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             color: theme.cardColor,
@@ -745,7 +736,6 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
             ),
           ),
           const Divider(height: 1, thickness: 1),
-
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -804,8 +794,9 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                                       item["description"],
                                       maxLines: 3,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: Colors.black87,
+                                      style: TextStyle(
+                                        color: theme.textTheme.bodyMedium?.color
+                                            ?.withValues(alpha: 0.8),
                                       ),
                                     ),
                                   ],
@@ -967,7 +958,6 @@ class _EditResourceScreenState extends State<EditResourceScreen> {
   late final TextEditingController _titleController;
   late final TextEditingController _descController;
   bool _isSaving = false;
-
   late String _selectedType;
   late int _selectedSemester;
   late String _selectedDeptId;
@@ -1132,12 +1122,17 @@ class _EditResourceScreenState extends State<EditResourceScreen> {
               onPressed: _isSaving ? null : _submitEdit,
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Colors.white,
               ),
               child: _isSaving
                   ? const SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
                   : const Text(
                       'Save Changes',
@@ -1177,11 +1172,9 @@ class UploadResourceScreen extends StatefulWidget {
 class _UploadResourceScreenState extends State<UploadResourceScreen> {
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
-
   PlatformFile? _selectedFile;
   bool _isPickingFile = false;
   bool _isUploading = false;
-
   late String _selectedType;
   late int _selectedSemester;
   late String _selectedDeptId;
@@ -1207,16 +1200,12 @@ class _UploadResourceScreenState extends State<UploadResourceScreen> {
 
   Future<void> _pickFile() async {
     setState(() => _isPickingFile = true);
-
     FocusManager.instance.primaryFocus?.unfocus();
-
     await Future.delayed(const Duration(milliseconds: 150));
-
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.any,
       );
-
       if (result != null) {
         setState(() => _selectedFile = result.files.first);
       }
@@ -1249,6 +1238,7 @@ class _UploadResourceScreenState extends State<UploadResourceScreen> {
     }
 
     setState(() => _isUploading = true);
+
     try {
       final uploadResponse = await widget.apiClient
           .authenticatedMultipartRequest(
@@ -1350,7 +1340,6 @@ class _UploadResourceScreenState extends State<UploadResourceScreen> {
               ),
             ),
             const SizedBox(height: 24),
-
             OutlinedButton.icon(
               icon: _isPickingFile
                   ? const SizedBox(
@@ -1377,7 +1366,6 @@ class _UploadResourceScreenState extends State<UploadResourceScreen> {
               ),
               onPressed: _isPickingFile || _isUploading ? null : _pickFile,
             ),
-
             const SizedBox(height: 24),
             Row(
               children: [
@@ -1438,17 +1426,21 @@ class _UploadResourceScreenState extends State<UploadResourceScreen> {
               ),
             ),
             const SizedBox(height: 32),
-
             ElevatedButton(
               onPressed: _isUploading ? null : _submit,
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Colors.white,
               ),
               child: _isUploading
                   ? const SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
                   : const Text(
                       'Upload File',

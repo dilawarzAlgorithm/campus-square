@@ -19,7 +19,6 @@ class _SquareScreenState extends State<SquareScreen> {
   late final ApiClient _apiClient;
   bool _isLoading = true;
   List<dynamic> _posts = [];
-
   String? _selectedCategory;
 
   final Map<String, String> _categories = {
@@ -51,7 +50,6 @@ class _SquareScreenState extends State<SquareScreen> {
 
   Future<void> _fetchPosts() async {
     setState(() => _isLoading = true);
-
     String endpoint = "/api/square/notices";
     if (_selectedCategory != null) {
       endpoint += "?category=$_selectedCategory";
@@ -203,10 +201,8 @@ class _SquareScreenState extends State<SquareScreen> {
     final FocusNode commentFocusNode = FocusNode();
     bool isSubmitting = false;
     bool isInputEmpty = true;
-
     String? replyingToId;
     String? replyingToName;
-
     final ScrollController listScrollController = ScrollController();
 
     final currentUser = context.read<CampusSquareAuth>().user;
@@ -236,9 +232,11 @@ class _SquareScreenState extends State<SquareScreen> {
               ),
               child: Container(
                 height: MediaQuery.of(context).size.height * 0.9,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                decoration: BoxDecoration(
+                  color: theme.scaffoldBackgroundColor,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20),
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -268,7 +266,6 @@ class _SquareScreenState extends State<SquareScreen> {
                       ),
                     ),
                     const Divider(height: 1),
-
                     Expanded(
                       child: flatComments.isEmpty
                           ? Center(
@@ -305,7 +302,6 @@ class _SquareScreenState extends State<SquareScreen> {
                                 final item = flatComments[index];
                                 final c = item['comment'];
                                 final depth = item['depth'] as int;
-
                                 final isStaffComment =
                                     c['author']['role'] == 'ADMIN' ||
                                     c['author']['role'] == 'COMMUNITY_HEAD';
@@ -397,9 +393,13 @@ class _SquareScreenState extends State<SquareScreen> {
                                               const SizedBox(height: 4),
                                               Text(
                                                 c['text'],
-                                                style: const TextStyle(
+                                                style: TextStyle(
                                                   fontSize: 14,
                                                   height: 1.3,
+                                                  color: theme
+                                                      .textTheme
+                                                      .bodyMedium
+                                                      ?.color,
                                                 ),
                                               ),
                                               const SizedBox(height: 8),
@@ -478,7 +478,6 @@ class _SquareScreenState extends State<SquareScreen> {
                               },
                             ),
                     ),
-
                     if (replyingToId != null)
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -486,9 +485,12 @@ class _SquareScreenState extends State<SquareScreen> {
                           vertical: 8,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
+                          color: theme.colorScheme.surfaceContainerHighest
+                              .withValues(alpha: 0.5),
                           border: Border(
-                            top: BorderSide(color: Colors.grey.shade300),
+                            top: BorderSide(
+                              color: Colors.grey.withValues(alpha: 0.2),
+                            ),
                           ),
                         ),
                         child: Row(
@@ -496,7 +498,8 @@ class _SquareScreenState extends State<SquareScreen> {
                             Text(
                               "Replying to ",
                               style: TextStyle(
-                                color: Colors.grey.shade700,
+                                color: theme.textTheme.bodyMedium?.color
+                                    ?.withValues(alpha: 0.7),
                                 fontSize: 12,
                               ),
                             ),
@@ -522,7 +525,6 @@ class _SquareScreenState extends State<SquareScreen> {
                           ],
                         ),
                       ),
-
                     SafeArea(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -543,7 +545,10 @@ class _SquareScreenState extends State<SquareScreen> {
                                       ? 'Write a reply...'
                                       : 'Write a comment...',
                                   filled: true,
-                                  fillColor: Colors.grey.shade100,
+                                  fillColor: theme
+                                      .colorScheme
+                                      .surfaceContainerHighest
+                                      .withValues(alpha: 0.5),
                                   contentPadding: const EdgeInsets.symmetric(
                                     horizontal: 16,
                                     vertical: 10,
@@ -660,7 +665,7 @@ class _SquareScreenState extends State<SquareScreen> {
                                       child: CircleAvatar(
                                         radius: 18,
                                         backgroundColor: isInputEmpty
-                                            ? Colors.grey.shade300
+                                            ? Colors.grey.withValues(alpha: 0.3)
                                             : theme.colorScheme.primary,
                                         child: const Icon(
                                           Icons.arrow_upward,
@@ -710,7 +715,7 @@ class _SquareScreenState extends State<SquareScreen> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
+                  color: Colors.grey.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -810,7 +815,6 @@ class _SquareScreenState extends State<SquareScreen> {
     final userRole =
         context.read<CampusSquareAuth>().user?['role'] ?? 'STUDENT';
     final isStaff = userRole == 'ADMIN' || userRole == 'COMMUNITY_HEAD';
-
     final availableCategories = isStaff
         ? _categories.values.toList()
         : ["LOST_FOUND", "RIDE_POOL", "ROOMMATE"];
@@ -906,7 +910,6 @@ class _SquareScreenState extends State<SquareScreen> {
                         }
                       },
                     ),
-
                     if (isStaff &&
                         (selectedType == 'NOTICE' ||
                             selectedType == 'EVENT')) ...[
@@ -945,7 +948,6 @@ class _SquareScreenState extends State<SquareScreen> {
                               setModalState(() => urgentHours = val!),
                         ),
                     ],
-
                     const SizedBox(height: 24),
                     ElevatedButton(
                       onPressed: isSubmitting
@@ -957,6 +959,7 @@ class _SquareScreenState extends State<SquareScreen> {
                               }
 
                               setModalState(() => isSubmitting = true);
+
                               try {
                                 String? urgentUntilStr;
                                 if (isUrgent) {
@@ -978,6 +981,7 @@ class _SquareScreenState extends State<SquareScreen> {
                                         filePath: selectedFile!.path!,
                                         fileField: "file",
                                       );
+
                                   if (uploadRes.statusCode == 200) {
                                     final url = jsonDecode(
                                       uploadRes.body,
@@ -1005,7 +1009,6 @@ class _SquareScreenState extends State<SquareScreen> {
                                 }
 
                                 if (!context.mounted) return;
-
                                 final response = await _apiClient
                                     .authenticatedRequest(
                                       context,
@@ -1022,7 +1025,6 @@ class _SquareScreenState extends State<SquareScreen> {
                                     );
 
                                 if (!context.mounted) return;
-
                                 if (response.statusCode == 201) {
                                   Navigator.pop(ctx);
                                   _fetchPosts();
@@ -1062,12 +1064,17 @@ class _SquareScreenState extends State<SquareScreen> {
                             },
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Colors.white,
                       ),
                       child: isSubmitting
                           ? const SizedBox(
                               height: 20,
                               width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
                             )
                           : const Text(
                               'Publish',
@@ -1125,7 +1132,9 @@ class _SquareScreenState extends State<SquareScreen> {
             height: 60,
             decoration: BoxDecoration(
               color: theme.cardColor,
-              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+              border: Border(
+                bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
+              ),
             ),
             child: ListView(
               scrollDirection: Axis.horizontal,
@@ -1174,7 +1183,6 @@ class _SquareScreenState extends State<SquareScreen> {
               ],
             ),
           ),
-
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -1205,6 +1213,7 @@ class _SquareScreenState extends State<SquareScreen> {
                         final post = _posts[index];
                         final author = post['author'];
                         bool isUrgent = false;
+
                         if (post['urgent_until'] != null) {
                           final expireDate = DateTime.parse(
                             post['urgent_until'],
@@ -1330,7 +1339,6 @@ class _SquareScreenState extends State<SquareScreen> {
                                   ],
                                 ),
                                 const SizedBox(height: 16),
-
                                 if (isUrgent)
                                   Container(
                                     padding: const EdgeInsets.symmetric(
@@ -1372,10 +1380,10 @@ class _SquareScreenState extends State<SquareScreen> {
                                 const SizedBox(height: 8),
                                 Text(
                                   post['body'],
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 15,
                                     height: 1.4,
-                                    color: Colors.black87,
+                                    color: theme.textTheme.bodyMedium?.color,
                                   ),
                                 ),
                                 if (post['image_url'] != null) ...[
@@ -1401,7 +1409,6 @@ class _SquareScreenState extends State<SquareScreen> {
                                   ),
                                 ],
                                 const SizedBox(height: 16),
-
                                 Row(
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
@@ -1556,19 +1563,16 @@ class _SquareScreenState extends State<SquareScreen> {
                                         onPressed: () =>
                                             _showCommentsSheet(post),
                                       ),
-
                                     Container(
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 10,
                                         vertical: 4,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: const Color.fromARGB(
-                                          255,
-                                          239,
-                                          238,
-                                          238,
-                                        ),
+                                        color: theme
+                                            .colorScheme
+                                            .surfaceContainerHighest
+                                            .withValues(alpha: 0.5),
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: Builder(
@@ -1582,10 +1586,8 @@ class _SquareScreenState extends State<SquareScreen> {
                                                   '',
                                                 ),
                                               );
-
                                           final info =
                                               _categoryInfo[category.value];
-
                                           return Row(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [

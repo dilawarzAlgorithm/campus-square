@@ -53,10 +53,10 @@ class FullProfileScreen extends StatelessWidget {
         ),
         subtitle: Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w500,
-            color: Colors.black87,
+            color: Theme.of(context).textTheme.bodyLarge?.color,
           ),
         ),
       ),
@@ -99,10 +99,12 @@ class FullProfileScreen extends StatelessWidget {
                 return;
               }
               Navigator.pop(ctx);
+
               bool success = await auth.updateName(
                 firstController.text.trim(),
                 lastController.text.trim(),
               );
+
               if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -122,7 +124,6 @@ class FullProfileScreen extends StatelessWidget {
 
   void _showEditPreferencesDialog(BuildContext context, CampusSquareAuth auth) {
     final profilePrefs = auth.user?['profile'] as Map<String, dynamic>?;
-
     final dietaryController = TextEditingController(
       text: profilePrefs?['dietary_preference'] ?? '',
     );
@@ -178,6 +179,7 @@ class FullProfileScreen extends StatelessWidget {
                 sleepController.text.trim(),
                 studyController.text.trim(),
               );
+
               if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -250,7 +252,6 @@ class FullProfileScreen extends StatelessWidget {
             user['role'] ?? 'STUDENT',
             Icons.admin_panel_settings_outlined,
           ),
-
           _buildSectionHeader(context, "Academics"),
           _buildInfoTile(
             context,
@@ -270,7 +271,6 @@ class FullProfileScreen extends StatelessWidget {
             user['roll_number'] ?? 'Not Assigned',
             Icons.badge_outlined,
           ),
-
           _buildSectionHeader(
             context,
             "Preferences & Habits",

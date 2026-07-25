@@ -176,6 +176,7 @@ class _SavedVaultScreenState extends State<SavedVaultScreen> {
     if (inAppPreview) {
       mode = LaunchMode.inAppBrowserView;
     }
+
     try {
       bool launched = await launchUrl(url, mode: mode);
       if (!launched) {
@@ -258,8 +259,12 @@ class _SavedVaultScreenState extends State<SavedVaultScreen> {
                                     item["description"],
                                     maxLines: 3,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: Colors.black87,
+                                    style: TextStyle(
+                                      color: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.color
+                                          ?.withValues(alpha: 0.8),
                                     ),
                                   ),
                                 ],
