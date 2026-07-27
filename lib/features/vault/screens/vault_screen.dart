@@ -1317,6 +1317,7 @@ class _UploadResourceScreenState extends State<UploadResourceScreen> {
           children: [
             DropdownButtonFormField<String>(
               initialValue: _selectedDeptId,
+              isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Target Department',
                 border: OutlineInputBorder(),
@@ -1324,7 +1325,10 @@ class _UploadResourceScreenState extends State<UploadResourceScreen> {
               items: widget.departments.map<DropdownMenuItem<String>>((dept) {
                 return DropdownMenuItem<String>(
                   value: dept['id'],
-                  child: Text("[${dept['code']}] ${dept['name']}"),
+                  child: Text(
+                    "[${dept['code']}] ${dept['name']}",
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 );
               }).toList(),
               onChanged: (val) => setState(() => _selectedDeptId = val!),
