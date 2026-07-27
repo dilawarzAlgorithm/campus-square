@@ -39,16 +39,34 @@ class AppNotification {
 
 class NotificationProvider extends ChangeNotifier {
   List<AppNotification> _notifications = [];
+  String? _currentUserId;
 
   List<AppNotification> get notifications => _notifications;
   int get unreadCount => _notifications.where((n) => !n.isRead).length;
 
-  Future<void> initialize() async {
-    await _loadHistory();
+  Future<void> setUserId(String? userId) async {
+    if (_currentUserId != userId) {
+      _currentUserId = userId;
+      _notifications.clear();
 
+      if (userId != null) {
+        await _loadHistory();
+      }
+      notifyListeners();
+    }
+  }
+
+  Future<void> initialize() async {
     await FirebaseMessaging.instance.subscribeToTopic('all_users');
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      final senderId = message.data['sender_id'];
+      if (senderId != null &&
+          _currentUserId != null &&
+          senderId == _currentUserId) {
+        return;
+      }
+
       if (message.notification != null) {
         _addNotification(
           message.notification!.title ?? 'New Notification',
@@ -81,8 +99,10 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   Future<void> _loadHistory() async {
+    if (_currentUserId == null) return;
     final prefs = await SharedPreferences.getInstance();
-    final data = prefs.getStringList('notification_history');
+    final data = prefs.getStringList('notification_history_$_currentUserId');
+
     if (data != null) {
       _notifications = data
           .map((e) => AppNotification.fromJson(jsonDecode(e)))
@@ -92,12 +112,22 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   Future<void> _saveHistory() async {
+    if (_currentUserId == null) return;
     final prefs = await SharedPreferences.getInstance();
     final data = _notifications
-        .take(50)
+        .take(50) // latest 50
         .map((e) => jsonEncode(e.toJson()))
         .toList();
-    await prefs.setStringList('notification_history', data);
+    await prefs.setStringList('notification_history_$_currentUserId', data);
+  }
+
+  Future<void> clearHistory() async {
+    if (_currentUserId != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('notification_history_$_currentUserId');
+    }
+    _notifications.clear();
+    notifyListeners();
   }
 }
 
@@ -115,6 +145,7 @@ class NotificationHistorySheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<NotificationProvider>();
+
     return Container(
       height: MediaQuery.of(context).size.height * 0.7,
       padding: const EdgeInsets.symmetric(vertical: 16),

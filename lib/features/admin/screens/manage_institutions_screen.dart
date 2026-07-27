@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import 'package:campus_square/core/network/api_client.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 
@@ -33,6 +34,7 @@ class _ManageInstitutionsScreenState extends State<ManageInstitutionsScreen> {
         "/api/admin/institutions",
         method: "GET",
       );
+
       if (response.statusCode == 200) {
         if (mounted) {
           setState(() {
@@ -55,7 +57,6 @@ class _ManageInstitutionsScreenState extends State<ManageInstitutionsScreen> {
     final headFirstNameController = TextEditingController();
     final headLastNameController = TextEditingController();
     final headPasswordController = TextEditingController();
-
     bool isSubmitting = false;
 
     showDialog(
@@ -97,11 +98,9 @@ class _ManageInstitutionsScreenState extends State<ManageInstitutionsScreen> {
                       border: OutlineInputBorder(),
                     ),
                   ),
-
                   const SizedBox(height: 16),
                   const Divider(),
                   const SizedBox(height: 16),
-
                   const Text(
                     "Initial Community Head Details",
                     style: TextStyle(fontWeight: FontWeight.bold),
@@ -193,6 +192,7 @@ class _ManageInstitutionsScreenState extends State<ManageInstitutionsScreen> {
                                   "head_password": headPasswordController.text,
                                 }),
                               );
+
                           if (!context.mounted) return;
 
                           if (response.statusCode == 201) {
@@ -239,6 +239,74 @@ class _ManageInstitutionsScreenState extends State<ManageInstitutionsScreen> {
     );
   }
 
+  void _showEditStorageLimitDialog(Map<String, dynamic> inst) {
+    final currentLimitMb = (inst['default_storage_limit'] / (1024 * 1024))
+        .round()
+        .toString();
+    final controller = TextEditingController(text: currentLimitMb);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Set Default Storage Limit"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Set the default storage limit (in MB) for all students in ${inst['short_name']}.',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Limit in MB',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final val = int.tryParse(controller.text.trim());
+              if (val == null) return;
+
+              try {
+                final response = await _apiClient.authenticatedRequest(
+                  context,
+                  "/api/admin/institutions/${inst['id']}/storage-limit",
+                  method: "PATCH",
+                  body: jsonEncode({"default_storage_limit_mb": val}),
+                );
+                if (!mounted) return;
+                if (response.statusCode == 200) {
+                  _fetchInstitutions();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Storage limit updated'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                }
+              } catch (e) {
+                // Ignore silent failure
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -271,7 +339,17 @@ class _ManageInstitutionsScreenState extends State<ManageInstitutionsScreen> {
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     subtitle: Text('@${inst['domain']}'),
-                    trailing: const Icon(Icons.more_vert),
+                    trailing: PopupMenuButton<String>(
+                      onSelected: (val) {
+                        if (val == 'storage') _showEditStorageLimitDialog(inst);
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'storage',
+                          child: Text('Edit Default Storage Limit'),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               },

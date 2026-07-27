@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import 'package:campus_square/core/network/api_client.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 import 'package:campus_square/features/chat/screens/chat_screen.dart';
@@ -54,7 +55,6 @@ class _SquareScreenState extends State<SquareScreen> {
     if (_selectedCategory != null) {
       endpoint += "?category=$_selectedCategory";
     }
-
     try {
       final response = await _apiClient.authenticatedRequest(
         context,
@@ -134,7 +134,7 @@ class _SquareScreenState extends State<SquareScreen> {
     );
   }
 
-  Future<void> _deletePost(String postId) async {
+  Future<void> _deletePost(String postId, {bool showSuccess = true}) async {
     try {
       final response = await _apiClient.authenticatedRequest(
         context,
@@ -145,16 +145,55 @@ class _SquareScreenState extends State<SquareScreen> {
       if (response.statusCode == 200) {
         _fetchPosts();
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Post deleted.'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        if (showSuccess) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Post deleted.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
       }
     } catch (e) {
       debugPrint("Error deleting post: $e");
     }
+  }
+
+  void _confirmResolvePost(Map<String, dynamic> post) {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Mark as Resolved?'),
+        content: const Text(
+          'Are you sure you want to mark this post as resolved? The post and its attachments will be permanently deleted from the Square to keep the feed clean.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.pop(dialogCtx);
+              _deletePost(post['id'], showSuccess: false);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Post resolved and removed from the Square! 🎉',
+                  ),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            },
+            child: const Text('Mark Resolved'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _openResource(String urlString) async {
@@ -209,6 +248,7 @@ class _SquareScreenState extends State<SquareScreen> {
     final currentUserId = currentUser?['id'];
     final userRole = currentUser?['role'] ?? 'STUDENT';
     final isStaff = userRole == 'ADMIN' || userRole == 'COMMUNITY_HEAD';
+
     final theme = Theme.of(context);
 
     List<dynamic> mutableComments = List.from(
@@ -302,6 +342,7 @@ class _SquareScreenState extends State<SquareScreen> {
                                 final item = flatComments[index];
                                 final c = item['comment'];
                                 final depth = item['depth'] as int;
+
                                 final isStaffComment =
                                     c['author']['role'] == 'ADMIN' ||
                                     c['author']['role'] == 'COMMUNITY_HEAD';
@@ -596,9 +637,11 @@ class _SquareScreenState extends State<SquareScreen> {
                                                             replyingToId,
                                                       }),
                                                     );
+
                                                 if (response.statusCode ==
                                                     201) {
                                                   await _fetchPosts();
+
                                                   final updatedPost = _posts
                                                       .firstWhere(
                                                         (p) =>
@@ -788,6 +831,7 @@ class _SquareScreenState extends State<SquareScreen> {
                     (p) => p['id'] == postId,
                   );
                   setModalState(() {});
+
                   if (!context.mounted) return;
                   Navigator.pop(context);
                   _showCommentsSheet(updatedPost);
@@ -815,6 +859,7 @@ class _SquareScreenState extends State<SquareScreen> {
     final userRole =
         context.read<CampusSquareAuth>().user?['role'] ?? 'STUDENT';
     final isStaff = userRole == 'ADMIN' || userRole == 'COMMUNITY_HEAD';
+
     final availableCategories = isStaff
         ? _categories.values.toList()
         : ["LOST_FOUND", "RIDE_POOL", "ROOMMATE"];
@@ -822,9 +867,11 @@ class _SquareScreenState extends State<SquareScreen> {
     String selectedType = availableCategories.first;
     bool isUrgent = false;
     int urgentHours = 48;
+
     final titleController = TextEditingController();
     final bodyController = TextEditingController();
     PlatformFile? selectedFile;
+
     bool isSubmitting = false;
 
     showModalBottomSheet(
@@ -1212,8 +1259,8 @@ class _SquareScreenState extends State<SquareScreen> {
                       itemBuilder: (context, index) {
                         final post = _posts[index];
                         final author = post['author'];
-                        bool isUrgent = false;
 
+                        bool isUrgent = false;
                         if (post['urgent_until'] != null) {
                           final expireDate = DateTime.parse(
                             post['urgent_until'],
@@ -1434,120 +1481,148 @@ class _SquareScreenState extends State<SquareScreen> {
                                                       author,
                                                     ),
                                               ),
-                                            ElevatedButton.icon(
-                                              icon: const Icon(
-                                                Icons.chat_bubble_outline,
-                                                size: 18,
-                                              ),
-                                              label: Text(
-                                                'Message ${author['first_name']}',
-                                              ),
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: theme
-                                                    .colorScheme
-                                                    .primary
-                                                    .withValues(alpha: 0.1),
-                                                foregroundColor:
-                                                    theme.colorScheme.primary,
-                                                elevation: 0,
-                                              ),
-                                              onPressed: () async {
-                                                String? initialText;
-                                                if (post['category'] ==
-                                                    'ROOMMATE') {
-                                                  final myProfile =
-                                                      currentUser?['profile'];
-                                                  final diet =
-                                                      myProfile?['dietary_preference'];
-                                                  final sleep =
-                                                      myProfile?['sleep_schedule'];
-                                                  final study =
-                                                      myProfile?['study_habits'];
 
-                                                  List<String> habits = [];
-                                                  if (diet != null &&
-                                                      diet
-                                                          .toString()
-                                                          .trim()
-                                                          .isNotEmpty) {
-                                                    habits.add('- Diet: $diet');
-                                                  }
-                                                  if (sleep != null &&
-                                                      sleep
-                                                          .toString()
-                                                          .trim()
-                                                          .isNotEmpty) {
-                                                    habits.add(
-                                                      '- Sleep: $sleep',
-                                                    );
-                                                  }
-                                                  if (study != null &&
-                                                      study
-                                                          .toString()
-                                                          .trim()
-                                                          .isNotEmpty) {
-                                                    habits.add(
-                                                      '- Study: $study',
-                                                    );
-                                                  }
+                                            // Handle Owner-specific actions
+                                            if (isOwner)
+                                              ElevatedButton.icon(
+                                                icon: const Icon(
+                                                  Icons.check_circle_outline,
+                                                  size: 18,
+                                                ),
+                                                label: const Text(
+                                                  'Mark as Resolved',
+                                                ),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.green
+                                                      .withValues(alpha: 0.1),
+                                                  foregroundColor: Colors.green,
+                                                  elevation: 0,
+                                                ),
+                                                onPressed: () =>
+                                                    _confirmResolvePost(post),
+                                              )
+                                            else
+                                              ElevatedButton.icon(
+                                                icon: const Icon(
+                                                  Icons.chat_bubble_outline,
+                                                  size: 18,
+                                                ),
+                                                label: Text(
+                                                  'Message ${author['first_name']}',
+                                                ),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: theme
+                                                      .colorScheme
+                                                      .primary
+                                                      .withValues(alpha: 0.1),
+                                                  foregroundColor:
+                                                      theme.colorScheme.primary,
+                                                  elevation: 0,
+                                                ),
+                                                onPressed: () async {
+                                                  String? initialText;
+                                                  if (post['category'] ==
+                                                      'ROOMMATE') {
+                                                    final myProfile =
+                                                        currentUser?['profile'];
+                                                    final diet =
+                                                        myProfile?['dietary_preference'];
+                                                    final sleep =
+                                                        myProfile?['sleep_schedule'];
+                                                    final study =
+                                                        myProfile?['study_habits'];
 
-                                                  if (habits.isNotEmpty) {
-                                                    initialText =
-                                                        'Hi! I saw your roommate post. Here are my habits:\n${habits.join('\n')}\nLet me know if we are a match!';
-                                                  } else {
-                                                    initialText =
-                                                        'Hi! I saw your roommate post. Let me know if we are a match!';
-                                                  }
-                                                }
-
-                                                try {
-                                                  final response = await _apiClient
-                                                      .authenticatedRequest(
-                                                        context,
-                                                        "/api/chat/dm/${author['id']}",
-                                                        method: "POST",
+                                                    List<String> habits = [];
+                                                    if (diet != null &&
+                                                        diet
+                                                            .toString()
+                                                            .trim()
+                                                            .isNotEmpty) {
+                                                      habits.add(
+                                                        '- Diet: $diet',
                                                       );
-                                                  if (!context.mounted) return;
-                                                  if (response.statusCode ==
-                                                      200) {
-                                                    final conv = jsonDecode(
-                                                      response.body,
-                                                    );
-                                                    Navigator.push(
-                                                      context,
-                                                      MaterialPageRoute(
-                                                        builder: (_) => ChatScreen(
-                                                          conversationId:
-                                                              conv['id'],
-                                                          chatTitle:
-                                                              '${author['first_name']} ${author['last_name']}',
-                                                          initialText:
-                                                              initialText,
+                                                    }
+                                                    if (sleep != null &&
+                                                        sleep
+                                                            .toString()
+                                                            .trim()
+                                                            .isNotEmpty) {
+                                                      habits.add(
+                                                        '- Sleep: $sleep',
+                                                      );
+                                                    }
+                                                    if (study != null &&
+                                                        study
+                                                            .toString()
+                                                            .trim()
+                                                            .isNotEmpty) {
+                                                      habits.add(
+                                                        '- Study: $study',
+                                                      );
+                                                    }
+                                                    if (habits.isNotEmpty) {
+                                                      initialText =
+                                                          'Hi! I saw your roommate post. Here are my habits:\n${habits.join('\n')}\nLet me know if we are a match!';
+                                                    } else {
+                                                      initialText =
+                                                          'Hi! I saw your roommate post. Let me know if we are a match!';
+                                                    }
+                                                  }
+
+                                                  try {
+                                                    final response = await _apiClient
+                                                        .authenticatedRequest(
+                                                          context,
+                                                          "/api/chat/dm/${author['id']}",
+                                                          method: "POST",
+                                                        );
+
+                                                    if (!context.mounted) {
+                                                      return;
+                                                    }
+                                                    if (response.statusCode ==
+                                                        200) {
+                                                      final conv = jsonDecode(
+                                                        response.body,
+                                                      );
+                                                      Navigator.push(
+                                                        context,
+                                                        MaterialPageRoute(
+                                                          builder: (_) =>
+                                                              ChatScreen(
+                                                                conversationId:
+                                                                    conv['id'],
+                                                                chatTitle:
+                                                                    '${author['first_name']} ${author['last_name']}',
+                                                                initialText:
+                                                                    initialText,
+                                                              ),
                                                         ),
-                                                      ),
-                                                    );
-                                                  } else {
-                                                    final error = jsonDecode(
-                                                      response.body,
-                                                    );
-                                                    ScaffoldMessenger.of(
-                                                      context,
-                                                    ).showSnackBar(
-                                                      SnackBar(
-                                                        content: Text(
-                                                          error['detail'] ??
-                                                              "Could not start chat",
+                                                      );
+                                                    } else {
+                                                      final error = jsonDecode(
+                                                        response.body,
+                                                      );
+                                                      ScaffoldMessenger.of(
+                                                        context,
+                                                      ).showSnackBar(
+                                                        SnackBar(
+                                                          content: Text(
+                                                            error['detail'] ??
+                                                                "Could not start chat",
+                                                          ),
+                                                          backgroundColor:
+                                                              Colors.red,
                                                         ),
-                                                        backgroundColor:
-                                                            Colors.red,
-                                                      ),
+                                                      );
+                                                    }
+                                                  } catch (e) {
+                                                    debugPrint(
+                                                      "Chat error: $e",
                                                     );
                                                   }
-                                                } catch (e) {
-                                                  debugPrint("Chat error: $e");
-                                                }
-                                              },
-                                            ),
+                                                },
+                                              ),
                                           ],
                                         ),
                                       )

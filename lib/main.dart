@@ -12,15 +12,18 @@ import 'package:campus_square/shared/widgets/auth_route_guard.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
-
   await Firebase.initializeApp();
 
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => CampusSquareAuth()),
-        ChangeNotifierProvider(
+        ChangeNotifierProxyProvider<CampusSquareAuth, NotificationProvider>(
           create: (_) => NotificationProvider()..initialize(),
+          update: (_, auth, notif) {
+            notif?.setUserId(auth.user?['id']);
+            return notif!;
+          },
         ),
         ChangeNotifierProvider(create: (_) => ThemeProvider()..initialize()),
       ],

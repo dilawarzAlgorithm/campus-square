@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 import 'package:campus_square/features/vault/screens/saved_vault_screen.dart';
 import 'package:campus_square/features/profile/screens/full_profile_screen.dart';
@@ -58,12 +59,10 @@ class ProfileScreen extends StatelessWidget {
                 return;
               }
               Navigator.pop(ctx);
-
               bool success = await auth.updateName(
                 firstController.text.trim(),
                 lastController.text.trim(),
               );
-
               if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -89,7 +88,6 @@ class ProfileScreen extends StatelessWidget {
 
     final karma = user?["karma"] ?? 0;
     final karmaTier = user?["karma_tier"] as Map<String, dynamic>?;
-
     final int level = karmaTier?["level"] ?? 1;
     final String title = karmaTier?["title"] ?? "Novice";
     final double progress = (karmaTier?["progress_percentage"] ?? 0.0)
@@ -98,6 +96,15 @@ class ProfileScreen extends StatelessWidget {
         karmaTier != null && karmaTier["points_to_next"] != null
         ? '${karmaTier["points_to_next"]} pts to ${karmaTier["next_tier_title"]}'
         : 'Max Level Reached!';
+
+    final int storageUsed = user?["storage_used"] ?? 0;
+    final int storageLimit =
+        user?["effective_storage_limit"] ?? 52428800; // default 50 MB
+    final double usedMb = storageUsed / (1024 * 1024);
+    final double limitMb = storageLimit / (1024 * 1024);
+    final double storageProgress = (storageLimit > 0)
+        ? (storageUsed / storageLimit).clamp(0.0, 1.0)
+        : 0.0;
 
     return RefreshIndicator(
       onRefresh: () => auth.refreshProfile(),
@@ -145,7 +152,6 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-
           Center(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -170,9 +176,7 @@ class ProfileScreen extends StatelessWidget {
               ),
             ),
           ),
-
           const SizedBox(height: 32),
-
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
@@ -278,8 +282,76 @@ class ProfileScreen extends StatelessWidget {
               ],
             ),
           ),
-
           const SizedBox(height: 32),
+
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+            child: Text(
+              'STORAGE USAGE',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ),
+          Card(
+            elevation: 0,
+            color: theme.colorScheme.surfaceContainerHighest.withValues(
+              alpha: 0.4,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Cloud Storage',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        '${usedMb.toStringAsFixed(1)} MB / ${limitMb.toStringAsFixed(0)} MB',
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      value: storageProgress,
+                      minHeight: 8,
+                      backgroundColor: Colors.grey.shade300,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        storageProgress > 0.9
+                            ? Colors.red
+                            : theme.colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                  if (storageProgress > 0.9)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        'You are running out of storage. Delete old files to free up space.',
+                        style: TextStyle(color: Colors.red, fontSize: 12),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
 
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
@@ -355,9 +427,7 @@ class ProfileScreen extends StatelessWidget {
               ],
             ),
           ),
-
           const SizedBox(height: 24),
-
           ElevatedButton.icon(
             onPressed: () => auth.logout(),
             icon: const Icon(Icons.logout),

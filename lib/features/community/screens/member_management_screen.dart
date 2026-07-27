@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import 'package:campus_square/core/network/api_client.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 
@@ -57,6 +58,7 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
         method: "PATCH",
         body: jsonEncode({"role": newRole}),
       );
+
       if (response.statusCode == 200) {
         _fetchMembers();
         _showSuccess("User role updated to $newRole");
@@ -76,6 +78,7 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
         method: "PATCH",
         body: jsonEncode({"is_blocked": blockStatus}),
       );
+
       if (response.statusCode == 200) {
         _fetchMembers();
         _showSuccess(blockStatus ? "User blocked" : "User unblocked");
@@ -97,6 +100,7 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
         method: "PATCH",
         body: jsonEncode({"roll_number": rollNumber}),
       );
+
       if (response.statusCode == 200) {
         _fetchMembers();
         _showSuccess("Roll number updated successfully");
@@ -132,6 +136,72 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
             onPressed: () {
               Navigator.pop(ctx);
               _updateRollNumber(user['id'], controller.text.trim());
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showStorageLimitDialog(Map<String, dynamic> user) {
+    final currentLimit = user['storage_limit'];
+    final currentLimitMb = currentLimit != null
+        ? (currentLimit / (1024 * 1024)).round().toString()
+        : '';
+    final controller = TextEditingController(text: currentLimitMb);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("Set Storage Limit"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Set a custom storage limit for ${user['first_name']}. Leave blank to reset to the institution default.',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Limit in MB',
+                hintText: 'e.g. 100',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final val = controller.text.trim();
+              final int? mbLimit = val.isNotEmpty ? int.tryParse(val) : null;
+
+              try {
+                final response = await _apiClient.authenticatedRequest(
+                  context,
+                  "/api/community/members/${user['id']}/storage-limit",
+                  method: "PATCH",
+                  body: jsonEncode({"storage_limit_mb": mbLimit}),
+                );
+                if (response.statusCode == 200) {
+                  _fetchMembers();
+                  _showSuccess("Storage limit updated successfully");
+                } else {
+                  _showError(
+                    jsonDecode(response.body)['detail'] ?? "Update failed",
+                  );
+                }
+              } catch (e) {
+                _showError("Update error: $e");
+              }
             },
             child: const Text('Save'),
           ),
@@ -237,7 +307,6 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Member Directory'),
@@ -357,11 +426,18 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
                             if (value == 'edit_roll') {
                               _showEditRollNumberDialog(user);
                             }
+                            if (value == 'edit_storage') {
+                              _showStorageLimitDialog(user);
+                            }
                           },
                           itemBuilder: (context) => [
                             const PopupMenuItem(
                               value: 'edit_roll',
                               child: Text('Edit Roll Number'),
+                            ),
+                            const PopupMenuItem(
+                              value: 'edit_storage',
+                              child: Text('Edit Storage Quota'),
                             ),
                             const PopupMenuDivider(),
                             if (role == 'STUDENT')
