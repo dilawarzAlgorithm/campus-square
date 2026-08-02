@@ -23,10 +23,13 @@ class _NotificationSettingsScreenState
   bool _importantNotices = true;
   bool _resources = true;
   bool _isLoading = true;
+  String _instId = '';
 
   @override
   void initState() {
     super.initState();
+    final auth = context.read<CampusSquareAuth>();
+    _instId = auth.user?['institution_id'] ?? '';
     _loadPreferences();
   }
 
@@ -60,10 +63,10 @@ class _NotificationSettingsScreenState
   }
 
   Future<void> _syncAllTopics() async {
-    await _handleTopic('message_hub', _messageHub);
-    await _handleTopic('all_notices', _allNotices);
-    await _handleTopic('important_notices', _importantNotices);
-    await _handleTopic('resources', _resources);
+    if (_instId.isEmpty) return;
+    await _handleTopic('${_instId}_all_notices', _allNotices);
+    await _handleTopic('${_instId}_important_notices', _importantNotices);
+    await _handleTopic('${_instId}_resources', _resources);
   }
 
   @override
@@ -170,6 +173,7 @@ class _NotificationSettingsScreenState
               await _savePreference('fcm_all_notices', _allNotices);
               await _savePreference('fcm_important_notices', _importantNotices);
               await _savePreference('fcm_resources', _resources);
+
               _syncAllTopics();
 
               if (context.mounted) {
@@ -188,7 +192,6 @@ class _NotificationSettingsScreenState
                 ? (bool value) async {
                     setState(() => _messageHub = value);
                     await _savePreference('fcm_message_hub', value);
-                    _handleTopic('message_hub', value);
 
                     if (context.mounted) {
                       context.read<CampusSquareAuth>().updateFCMTokenStatus(
@@ -206,7 +209,9 @@ class _NotificationSettingsScreenState
                 ? (bool value) async {
                     setState(() => _allNotices = value);
                     await _savePreference('fcm_all_notices', value);
-                    _handleTopic('all_notices', value);
+                    if (_instId.isNotEmpty) {
+                      _handleTopic('${_instId}_all_notices', value);
+                    }
                   }
                 : null,
           ),
@@ -218,7 +223,9 @@ class _NotificationSettingsScreenState
                 ? (bool value) async {
                     setState(() => _importantNotices = value);
                     await _savePreference('fcm_important_notices', value);
-                    _handleTopic('important_notices', value);
+                    if (_instId.isNotEmpty) {
+                      _handleTopic('${_instId}_important_notices', value);
+                    }
                   }
                 : null,
           ),
@@ -230,7 +237,9 @@ class _NotificationSettingsScreenState
                 ? (bool value) async {
                     setState(() => _resources = value);
                     await _savePreference('fcm_resources', value);
-                    _handleTopic('resources', value);
+                    if (_instId.isNotEmpty) {
+                      _handleTopic('${_instId}_resources', value);
+                    }
                   }
                 : null,
           ),

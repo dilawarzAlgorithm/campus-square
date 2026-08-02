@@ -10,6 +10,9 @@ class ApiClient {
   final String baseUrl;
   final SecureStorageService _storage = SecureStorageService();
 
+  static bool _isRefreshing = false;
+  static Future<bool>? _refreshFuture;
+
   ApiClient({required this.baseUrl});
 
   Future<http.Response> authenticatedRequest(
@@ -28,7 +31,6 @@ class ApiClient {
     }
 
     http.Response response;
-
     switch (method.toUpperCase()) {
       case "POST":
         response = await http.post(url, headers: finalHeaders, body: body);
@@ -52,7 +54,6 @@ class ApiClient {
       try {
         final responseBody = jsonDecode(response.body);
         final detail = responseBody['detail']?.toString().toLowerCase() ?? '';
-
         if (detail.contains('suspended') || detail.contains('blocked')) {
           debugPrint("Account suspended. Forcing logout.");
           if (context.mounted) {
@@ -78,14 +79,13 @@ class ApiClient {
     }
 
     if (response.statusCode == 401) {
-      debugPrint("⏳ Access token expired. Attempting silent token rotation...");
-      final refreshSuccess = await _rotateTokens();
+      debugPrint("Access token expired. Attempting silent token rotation...");
+      final refreshSuccess = await _rotateTokensSafe();
 
       if (refreshSuccess) {
         final newAccessToken = await _storage.getAccessToken();
         if (newAccessToken != null) {
           finalHeaders["Authorization"] = "Bearer $newAccessToken";
-
           switch (method.toUpperCase()) {
             case "POST":
               return await http.post(url, headers: finalHeaders, body: body);
@@ -129,13 +129,12 @@ class ApiClient {
     }
 
     request.files.add(await http.MultipartFile.fromPath(fileField, filePath));
-
     var streamedResponse = await request.send();
     var response = await http.Response.fromStream(streamedResponse);
 
     if (response.statusCode == 401) {
-      debugPrint("⏳ Access token expired during upload. Rotating...");
-      final refreshSuccess = await _rotateTokens();
+      debugPrint("Access token expired during upload. Rotating...");
+      final refreshSuccess = await _rotateTokensSafe();
 
       if (refreshSuccess) {
         final newAccessToken = await _storage.getAccessToken();
@@ -145,7 +144,6 @@ class ApiClient {
           newRequest.files.add(
             await http.MultipartFile.fromPath(fileField, filePath),
           );
-
           var newStreamed = await newRequest.send();
           return await http.Response.fromStream(newStreamed);
         }
@@ -158,7 +156,19 @@ class ApiClient {
         }
       }
     }
+
     return response;
+  }
+
+  Future<bool> _rotateTokensSafe() async {
+    if (_isRefreshing && _refreshFuture != null) {
+      return await _refreshFuture!;
+    }
+    _isRefreshing = true;
+    _refreshFuture = _rotateTokens();
+    final result = await _refreshFuture!;
+    _isRefreshing = false;
+    return result;
   }
 
   Future<bool> _rotateTokens() async {
@@ -187,6 +197,7 @@ class ApiClient {
     } catch (e) {
       debugPrint("Network error during token rotation: $e");
     }
+
     return false;
   }
 }

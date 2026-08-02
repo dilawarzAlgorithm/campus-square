@@ -1,8 +1,46 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  if (message.notification != null) {
+    final prefs = await SharedPreferences.getInstance();
+    const storage = FlutterSecureStorage();
+    final rawJson = await storage.read(key: "USER_PROFILE");
+
+    if (rawJson != null) {
+      try {
+        final profile = jsonDecode(rawJson);
+        final userId = profile['id'];
+
+        if (userId != null) {
+          final notif = {
+            'id': DateTime.now().millisecondsSinceEpoch.toString(),
+            'title': message.notification!.title ?? 'New Notification',
+            'body': message.notification!.body ?? '',
+            'timestamp': DateTime.now().toIso8601String(),
+            'isRead': false,
+          };
+
+          final key = 'notification_history_$userId';
+          final history = prefs.getStringList(key) ?? [];
+          history.insert(0, jsonEncode(notif));
+
+          if (history.length > 50) history.removeLast();
+          await prefs.setStringList(key, history);
+        }
+      } catch (e) {
+        debugPrint("Error parsing profile in background: $e");
+      }
+    }
+  }
+}
 
 class AppNotification {
   final String id;
@@ -42,13 +80,13 @@ class NotificationProvider extends ChangeNotifier {
   String? _currentUserId;
 
   List<AppNotification> get notifications => _notifications;
+
   int get unreadCount => _notifications.where((n) => !n.isRead).length;
 
   Future<void> setUserId(String? userId) async {
     if (_currentUserId != userId) {
       _currentUserId = userId;
       _notifications.clear();
-
       if (userId != null) {
         await _loadHistory();
       }
@@ -57,6 +95,14 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   Future<void> initialize() async {
+    await FirebaseMessaging.instance.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
     await FirebaseMessaging.instance.subscribeToTopic('all_users');
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
@@ -102,7 +148,6 @@ class NotificationProvider extends ChangeNotifier {
     if (_currentUserId == null) return;
     final prefs = await SharedPreferences.getInstance();
     final data = prefs.getStringList('notification_history_$_currentUserId');
-
     if (data != null) {
       _notifications = data
           .map((e) => AppNotification.fromJson(jsonDecode(e)))

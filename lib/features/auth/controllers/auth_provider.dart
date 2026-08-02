@@ -49,15 +49,49 @@ class CampusSquareAuth extends ChangeNotifier {
     if (refreshToken != null && profile != null) {
       _user = profile;
       _status = ApplicationState.authenticated;
-
       final prefs = await SharedPreferences.getInstance();
       final isMessageEnabled = prefs.getBool('fcm_message_hub') ?? true;
       final allEnabled = prefs.getBool('fcm_all_notifications') ?? true;
       await updateFCMTokenStatus(allEnabled && isMessageEnabled);
+      await syncTopics();
     } else {
       _status = ApplicationState.unauthenticated;
     }
     notifyListeners();
+  }
+
+  Future<void> clearTopics() async {
+    try {
+      final fcm = FirebaseMessaging.instance;
+      final instId = _user?['institution_id'] ?? '';
+      if (instId.isNotEmpty) {
+        await fcm.unsubscribeFromTopic('${instId}_all_notices');
+        await fcm.unsubscribeFromTopic('${instId}_important_notices');
+        await fcm.unsubscribeFromTopic('${instId}_resources');
+      }
+    } catch (_) {}
+  }
+
+  Future<void> syncTopics() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final fcm = FirebaseMessaging.instance;
+      final instId = _user?['institution_id'] ?? '';
+      if (instId.isEmpty) return;
+
+      final allEnabled = prefs.getBool('fcm_all_notifications') ?? true;
+      if (allEnabled) {
+        if (prefs.getBool('fcm_all_notices') ?? true) {
+          await fcm.subscribeToTopic('${instId}_all_notices');
+        }
+        if (prefs.getBool('fcm_important_notices') ?? true) {
+          await fcm.subscribeToTopic('${instId}_important_notices');
+        }
+        if (prefs.getBool('fcm_resources') ?? true) {
+          await fcm.subscribeToTopic('${instId}_resources');
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> updateFCMTokenStatus(bool isEnabled) async {
@@ -92,6 +126,7 @@ class CampusSquareAuth extends ChangeNotifier {
   }) async {
     try {
       final url = Uri.parse("$baseUrl/api/auth/register");
+
       final bodyMap = {
         "email": email,
         "password": password,
@@ -155,6 +190,7 @@ class CampusSquareAuth extends ChangeNotifier {
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"email": email, "password": password}),
       );
+
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
@@ -193,6 +229,7 @@ class CampusSquareAuth extends ChangeNotifier {
         final isMessageEnabled = prefs.getBool('fcm_message_hub') ?? true;
         final allEnabled = prefs.getBool('fcm_all_notifications') ?? true;
         await updateFCMTokenStatus(allEnabled && isMessageEnabled);
+        await syncTopics();
 
         notifyListeners();
         return true;
@@ -233,6 +270,7 @@ class CampusSquareAuth extends ChangeNotifier {
         final isMessageEnabled = prefs.getBool('fcm_message_hub') ?? true;
         final allEnabled = prefs.getBool('fcm_all_notifications') ?? true;
         await updateFCMTokenStatus(allEnabled && isMessageEnabled);
+        await syncTopics();
 
         notifyListeners();
         return AuthResult(success: true, message: "Logged in successfully.");
@@ -285,6 +323,7 @@ class CampusSquareAuth extends ChangeNotifier {
   Future<bool> updateName(String firstName, String lastName) async {
     try {
       final accessToken = await _storage.getAccessToken();
+
       final response = await http.patch(
         Uri.parse("$baseUrl/api/auth/name"),
         headers: {
@@ -313,6 +352,7 @@ class CampusSquareAuth extends ChangeNotifier {
   ) async {
     try {
       final accessToken = await _storage.getAccessToken();
+
       final response = await http.patch(
         Uri.parse("$baseUrl/api/auth/profile"),
         headers: {
@@ -339,6 +379,7 @@ class CampusSquareAuth extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    await clearTopics();
     await _storage.clearSession();
     _user = null;
     _status = ApplicationState.unauthenticated;
@@ -346,6 +387,7 @@ class CampusSquareAuth extends ChangeNotifier {
   }
 
   void logoutForcefully() {
+    clearTopics();
     _storage.clearSession();
     _user = null;
     _status = ApplicationState.unauthenticated;
