@@ -451,7 +451,7 @@ class _MessagingHubScreenState extends State<MessagingHubScreen>
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     color: hasUnread
-                                        ? Colors.black87
+                                        ? theme.colorScheme.inverseSurface
                                         : Colors.grey,
                                     fontWeight: hasUnread
                                         ? FontWeight.bold
