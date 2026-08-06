@@ -135,8 +135,14 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
         body: jsonEncode({"vote_type": voteType}),
       );
       if (response.statusCode == 200) {
-        _fetchResources();
+        final updatedResource = jsonDecode(response.body);
         if (mounted) {
+          setState(() {
+            final index = _resources.indexWhere((r) => r['id'] == resourceId);
+            if (index != -1) {
+              _resources[index] = updatedResource;
+            }
+          });
           context.read<CampusSquareAuth>().refreshProfile();
         }
       }
