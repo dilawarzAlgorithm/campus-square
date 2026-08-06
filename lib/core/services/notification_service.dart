@@ -20,20 +20,27 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
         final userId = profile['id'];
 
         if (userId != null) {
+          final title = message.notification!.title ?? 'New Notification';
+          final body = message.notification!.body ?? '';
+
           final notif = {
             'id': DateTime.now().millisecondsSinceEpoch.toString(),
-            'title': message.notification!.title ?? 'New Notification',
-            'body': message.notification!.body ?? '',
+            'title': title,
+            'body': body,
             'timestamp': DateTime.now().toIso8601String(),
             'isRead': false,
           };
 
           final key = 'notification_history_$userId';
           final history = prefs.getStringList(key) ?? [];
-          history.insert(0, jsonEncode(notif));
 
-          if (history.length > 50) history.removeLast();
-          await prefs.setStringList(key, history);
+          if (history.isEmpty ||
+              !history.first.contains(title) ||
+              !history.first.contains(body)) {
+            history.insert(0, jsonEncode(notif));
+            if (history.length > 50) history.removeLast();
+            await prefs.setStringList(key, history);
+          }
         }
       } catch (e) {
         debugPrint("Error parsing profile in background: $e");
@@ -78,6 +85,7 @@ class AppNotification {
 class NotificationProvider extends ChangeNotifier {
   List<AppNotification> _notifications = [];
   String? _currentUserId;
+  bool _isInitialized = false;
 
   List<AppNotification> get notifications => _notifications;
 
@@ -95,6 +103,9 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   Future<void> initialize() async {
+    if (_isInitialized) return;
+    _isInitialized = true;
+
     await FirebaseMessaging.instance.requestPermission(
       alert: true,
       badge: true,
@@ -123,6 +134,14 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   void _addNotification(String title, String body) {
+    if (_notifications.isNotEmpty &&
+        _notifications.first.title == title &&
+        _notifications.first.body == body &&
+        DateTime.now().difference(_notifications.first.timestamp).inSeconds <
+            3) {
+      return;
+    }
+
     _notifications.insert(
       0,
       AppNotification(

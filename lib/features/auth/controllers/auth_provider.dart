@@ -42,22 +42,29 @@ class CampusSquareAuth extends ChangeNotifier {
   }
 
   Future<void> checkActiveSession() async {
-    await Future.delayed(const Duration(milliseconds: 1000));
-    final refreshToken = await _storage.getRefreshToken();
-    final profile = await _storage.getUserProfile();
+    try {
+      await Future.delayed(const Duration(milliseconds: 1000));
+      final refreshToken = await _storage.getRefreshToken();
+      final profile = await _storage.getUserProfile();
 
-    if (refreshToken != null && profile != null) {
-      _user = profile;
-      _status = ApplicationState.authenticated;
-      final prefs = await SharedPreferences.getInstance();
-      final isMessageEnabled = prefs.getBool('fcm_message_hub') ?? true;
-      final allEnabled = prefs.getBool('fcm_all_notifications') ?? true;
-      await updateFCMTokenStatus(allEnabled && isMessageEnabled);
-      await syncTopics();
-    } else {
+      if (refreshToken != null && profile != null) {
+        _user = profile;
+        _status = ApplicationState.authenticated;
+        final prefs = await SharedPreferences.getInstance();
+        final isMessageEnabled = prefs.getBool('fcm_message_hub') ?? true;
+        final allEnabled = prefs.getBool('fcm_all_notifications') ?? true;
+
+        updateFCMTokenStatus(allEnabled && isMessageEnabled);
+        syncTopics();
+      } else {
+        _status = ApplicationState.unauthenticated;
+      }
+    } catch (e) {
       _status = ApplicationState.unauthenticated;
+      debugPrint("Session restore failed: $e");
+    } finally {
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   Future<void> clearTopics() async {
