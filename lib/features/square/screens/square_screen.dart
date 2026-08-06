@@ -912,6 +912,10 @@ class _SquareScreenState extends State<SquareScreen> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final int titleLen = titleController.text.trim().length;
+            final int bodyLen = bodyController.text.trim().length;
+            final bool isValid = titleLen >= 3 && bodyLen >= 10;
+
             return Padding(
               padding: EdgeInsets.only(
                 bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -953,18 +957,31 @@ class _SquareScreenState extends State<SquareScreen> {
                     const SizedBox(height: 16),
                     TextField(
                       controller: titleController,
-                      decoration: const InputDecoration(
+                      onChanged: (_) => setModalState(() {}),
+                      maxLength: 100,
+                      decoration: InputDecoration(
                         labelText: 'Title',
                         border: OutlineInputBorder(),
+                        counterText: '$titleLen / 100 (Min 3)',
+                        counterStyle: TextStyle(
+                          color: titleLen < 3 ? Colors.red : Colors.green,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),
                     TextField(
                       controller: bodyController,
                       maxLines: 4,
-                      decoration: const InputDecoration(
+                      onChanged: (_) => setModalState(() {}),
+                      decoration: InputDecoration(
                         labelText: 'Details',
                         border: OutlineInputBorder(),
+                        counterText: '$bodyLen characters (Min 10)',
+                        counterStyle: TextStyle(
+                          color: bodyLen < 10 ? Colors.red : Colors.green,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -1026,7 +1043,7 @@ class _SquareScreenState extends State<SquareScreen> {
                     ],
                     const SizedBox(height: 24),
                     ElevatedButton(
-                      onPressed: isSubmitting
+                      onPressed: (!isValid || isSubmitting)
                           ? null
                           : () async {
                               if (titleController.text.trim().isEmpty ||
