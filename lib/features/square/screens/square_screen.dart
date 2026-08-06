@@ -26,6 +26,7 @@ class _SquareScreenState extends State<SquareScreen> {
     "Notices": "NOTICE",
     "Events": "EVENT",
     "Lost & Found": "LOST_FOUND",
+    "Complaints": "COMPLAINT",
     "Ride Pool": "RIDE_POOL",
     "Roommate": "ROOMMATE",
   };
@@ -34,6 +35,7 @@ class _SquareScreenState extends State<SquareScreen> {
     "NOTICE": (icon: Icons.campaign_rounded, color: Colors.orange),
     "EVENT": (icon: Icons.celebration_rounded, color: Colors.purple),
     "LOST_FOUND": (icon: Icons.search_rounded, color: Colors.green),
+    "COMPLAINT": (icon: Icons.report_problem_rounded, color: Colors.redAccent),
     "RIDE_POOL": (
       icon: Icons.directions_car_filled_rounded,
       color: Colors.blue,
@@ -55,6 +57,7 @@ class _SquareScreenState extends State<SquareScreen> {
     if (_selectedCategory != null) {
       endpoint += "?category=$_selectedCategory";
     }
+
     try {
       final response = await _apiClient.authenticatedRequest(
         context,
@@ -73,6 +76,32 @@ class _SquareScreenState extends State<SquareScreen> {
       debugPrint("Error fetching square posts: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _votePost(String postId, String voteType) async {
+    HapticFeedback.lightImpact();
+    try {
+      final response = await _apiClient.authenticatedRequest(
+        context,
+        "/api/square/notices/$postId/vote",
+        method: "POST",
+        body: jsonEncode({"vote_type": voteType}),
+      );
+      if (response.statusCode == 200) {
+        final updatedPost = jsonDecode(response.body);
+        if (mounted) {
+          setState(() {
+            final index = _posts.indexWhere((p) => p['id'] == postId);
+            if (index != -1) {
+              _posts[index] = updatedPost;
+            }
+          });
+          context.read<CampusSquareAuth>().refreshProfile();
+        }
+      }
+    } catch (e) {
+      debugPrint("Voting error: $e");
     }
   }
 
@@ -143,7 +172,11 @@ class _SquareScreenState extends State<SquareScreen> {
       );
 
       if (response.statusCode == 200) {
-        _fetchPosts();
+        if (mounted) {
+          setState(() {
+            _posts.removeWhere((p) => p['id'] == postId);
+          });
+        }
         if (!mounted) return;
         if (showSuccess) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -181,9 +214,11 @@ class _SquareScreenState extends State<SquareScreen> {
               Navigator.pop(dialogCtx);
               _deletePost(post['id'], showSuccess: false);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
+                SnackBar(
                   content: Text(
-                    'Post resolved and removed from the Square! 🎉',
+                    post['category'] == 'COMPLAINT'
+                        ? 'Complaint marked as resolved and removed!'
+                        : 'Post resolved and removed from the Square!',
                   ),
                   backgroundColor: Colors.green,
                 ),
@@ -248,7 +283,6 @@ class _SquareScreenState extends State<SquareScreen> {
     final currentUserId = currentUser?['id'];
     final userRole = currentUser?['role'] ?? 'STUDENT';
     final isStaff = userRole == 'ADMIN' || userRole == 'COMMUNITY_HEAD';
-
     final theme = Theme.of(context);
 
     List<dynamic> mutableComments = List.from(
@@ -641,7 +675,6 @@ class _SquareScreenState extends State<SquareScreen> {
                                                 if (response.statusCode ==
                                                     201) {
                                                   await _fetchPosts();
-
                                                   final updatedPost = _posts
                                                       .firstWhere(
                                                         (p) =>
@@ -824,14 +857,12 @@ class _SquareScreenState extends State<SquareScreen> {
                   "/api/square/comments/${c['id']}",
                   method: "DELETE",
                 );
-
                 if (response.statusCode == 200) {
                   await _fetchPosts();
                   final updatedPost = _posts.firstWhere(
                     (p) => p['id'] == postId,
                   );
                   setModalState(() {});
-
                   if (!context.mounted) return;
                   Navigator.pop(context);
                   _showCommentsSheet(updatedPost);
@@ -862,16 +893,14 @@ class _SquareScreenState extends State<SquareScreen> {
 
     final availableCategories = isStaff
         ? _categories.values.toList()
-        : ["LOST_FOUND", "RIDE_POOL", "ROOMMATE"];
+        : ["LOST_FOUND", "COMPLAINT", "RIDE_POOL", "ROOMMATE"];
 
     String selectedType = availableCategories.first;
     bool isUrgent = false;
     int urgentHours = 48;
-
     final titleController = TextEditingController();
     final bodyController = TextEditingController();
     PlatformFile? selectedFile;
-
     bool isSubmitting = false;
 
     showModalBottomSheet(
@@ -1004,9 +1033,7 @@ class _SquareScreenState extends State<SquareScreen> {
                                   bodyController.text.trim().isEmpty) {
                                 return;
                               }
-
                               setModalState(() => isSubmitting = true);
-
                               try {
                                 String? urgentUntilStr;
                                 if (isUrgent) {
@@ -1056,6 +1083,7 @@ class _SquareScreenState extends State<SquareScreen> {
                                 }
 
                                 if (!context.mounted) return;
+
                                 final response = await _apiClient
                                     .authenticatedRequest(
                                       context,
@@ -1072,6 +1100,7 @@ class _SquareScreenState extends State<SquareScreen> {
                                     );
 
                                 if (!context.mounted) return;
+
                                 if (response.statusCode == 201) {
                                   Navigator.pop(ctx);
                                   _fetchPosts();
@@ -1259,8 +1288,8 @@ class _SquareScreenState extends State<SquareScreen> {
                       itemBuilder: (context, index) {
                         final post = _posts[index];
                         final author = post['author'];
-
                         bool isUrgent = false;
+
                         if (post['urgent_until'] != null) {
                           final expireDate = DateTime.parse(
                             post['urgent_until'],
@@ -1270,10 +1299,12 @@ class _SquareScreenState extends State<SquareScreen> {
 
                         final isOwner = author['id'] == currentUserId;
                         final canDelete = isOwner || isStaff;
+
                         final isPeerPost = [
                           "LOST_FOUND",
                           "RIDE_POOL",
                           "ROOMMATE",
+                          "COMPLAINT",
                         ].contains(post['category']);
 
                         return Card(
@@ -1459,15 +1490,142 @@ class _SquareScreenState extends State<SquareScreen> {
                                 Row(
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
-                                    if (isPeerPost)
-                                      Expanded(
-                                        child: Wrap(
-                                          spacing: 8,
-                                          runSpacing: 8,
-                                          crossAxisAlignment:
-                                              WrapCrossAlignment.center,
-                                          children: [
+                                    Expanded(
+                                      child: Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        crossAxisAlignment:
+                                            WrapCrossAlignment.center,
+                                        children: [
+                                          if (post['category'] ==
+                                              'COMPLAINT') ...[
+                                            Container(
+                                              decoration: BoxDecoration(
+                                                color: theme
+                                                    .colorScheme
+                                                    .surfaceContainerHighest
+                                                    .withValues(alpha: 0.4),
+                                                borderRadius:
+                                                    BorderRadius.circular(20),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  InkWell(
+                                                    borderRadius:
+                                                        const BorderRadius.horizontal(
+                                                          left: Radius.circular(
+                                                            20,
+                                                          ),
+                                                        ),
+                                                    onTap: () => _votePost(
+                                                      post["id"],
+                                                      "UPVOTE",
+                                                    ),
+                                                    child: Padding(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 12,
+                                                            vertical: 8,
+                                                          ),
+                                                      child: Row(
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: [
+                                                          Icon(
+                                                            post["my_vote"] ==
+                                                                    "UPVOTE"
+                                                                ? Icons
+                                                                      .thumb_up_rounded
+                                                                : Icons
+                                                                      .thumb_up_outlined,
+                                                            size: 16,
+                                                            color:
+                                                                post["my_vote"] ==
+                                                                    "UPVOTE"
+                                                                ? theme
+                                                                      .colorScheme
+                                                                      .primary
+                                                                : Colors
+                                                                      .grey
+                                                                      .shade700,
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 6,
+                                                          ),
+                                                          Text(
+                                                            '${(post["upvote_count"] ?? 0) - (post["downvote_count"] ?? 0)}',
+                                                            style: TextStyle(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              fontSize: 13,
+                                                              color:
+                                                                  post["my_vote"] ==
+                                                                      "UPVOTE"
+                                                                  ? theme
+                                                                        .colorScheme
+                                                                        .primary
+                                                                  : theme
+                                                                        .textTheme
+                                                                        .bodyMedium
+                                                                        ?.color,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  Container(
+                                                    width: 1,
+                                                    height: 20,
+                                                    color: Colors.grey
+                                                        .withValues(alpha: 0.3),
+                                                  ),
+                                                  InkWell(
+                                                    borderRadius:
+                                                        const BorderRadius.horizontal(
+                                                          right:
+                                                              Radius.circular(
+                                                                20,
+                                                              ),
+                                                        ),
+                                                    onTap: () => _votePost(
+                                                      post["id"],
+                                                      "DOWNVOTE",
+                                                    ),
+                                                    child: Padding(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 12,
+                                                            vertical: 8,
+                                                          ),
+                                                      child: Icon(
+                                                        post["my_vote"] ==
+                                                                "DOWNVOTE"
+                                                            ? Icons
+                                                                  .thumb_down_rounded
+                                                            : Icons
+                                                                  .thumb_down_outlined,
+                                                        size: 16,
+                                                        color:
+                                                            post["my_vote"] ==
+                                                                "DOWNVOTE"
+                                                            ? Colors.red
+                                                            : Colors
+                                                                  .grey
+                                                                  .shade700,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+
+                                          if (isPeerPost) ...[
                                             if (post['category'] == 'ROOMMATE')
                                               TextButton.icon(
                                                 icon: const Icon(
@@ -1475,15 +1633,22 @@ class _SquareScreenState extends State<SquareScreen> {
                                                   size: 18,
                                                 ),
                                                 label: const Text('Details'),
+                                                style: TextButton.styleFrom(
+                                                  minimumSize: const Size(
+                                                    0,
+                                                    36,
+                                                  ),
+                                                ),
                                                 onPressed: () =>
                                                     _showRoommateDetails(
                                                       context,
                                                       author,
                                                     ),
                                               ),
-
-                                            // Handle Owner-specific actions
-                                            if (isOwner)
+                                            if (isOwner ||
+                                                (isStaff &&
+                                                    post['category'] ==
+                                                        'COMPLAINT'))
                                               ElevatedButton.icon(
                                                 icon: const Icon(
                                                   Icons.check_circle_outline,
@@ -1497,6 +1662,14 @@ class _SquareScreenState extends State<SquareScreen> {
                                                       .withValues(alpha: 0.1),
                                                   foregroundColor: Colors.green,
                                                   elevation: 0,
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 12,
+                                                      ),
+                                                  minimumSize: const Size(
+                                                    0,
+                                                    36,
+                                                  ),
                                                 ),
                                                 onPressed: () =>
                                                     _confirmResolvePost(post),
@@ -1518,6 +1691,14 @@ class _SquareScreenState extends State<SquareScreen> {
                                                   foregroundColor:
                                                       theme.colorScheme.primary,
                                                   elevation: 0,
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 12,
+                                                      ),
+                                                  minimumSize: const Size(
+                                                    0,
+                                                    36,
+                                                  ),
                                                 ),
                                                 onPressed: () async {
                                                   String? initialText;
@@ -1560,6 +1741,7 @@ class _SquareScreenState extends State<SquareScreen> {
                                                         '- Study: $study',
                                                       );
                                                     }
+
                                                     if (habits.isNotEmpty) {
                                                       initialText =
                                                           'Hi! I saw your roommate post. Here are my habits:\n${habits.join('\n')}\nLet me know if we are a match!';
@@ -1568,7 +1750,6 @@ class _SquareScreenState extends State<SquareScreen> {
                                                           'Hi! I saw your roommate post. Let me know if we are a match!';
                                                     }
                                                   }
-
                                                   try {
                                                     final response = await _apiClient
                                                         .authenticatedRequest(
@@ -1580,6 +1761,7 @@ class _SquareScreenState extends State<SquareScreen> {
                                                     if (!context.mounted) {
                                                       return;
                                                     }
+
                                                     if (response.statusCode ==
                                                         200) {
                                                       final conv = jsonDecode(
@@ -1624,25 +1806,36 @@ class _SquareScreenState extends State<SquareScreen> {
                                                 },
                                               ),
                                           ],
-                                        ),
-                                      )
-                                    else
-                                      TextButton.icon(
-                                        icon: const Icon(
-                                          Icons.comment_outlined,
-                                          size: 18,
-                                        ),
-                                        label: Text(
-                                          'Comments (${post['comments']?.length ?? 0})',
-                                        ),
-                                        onPressed: () =>
-                                            _showCommentsSheet(post),
+
+                                          if (!isPeerPost ||
+                                              post['category'] == 'COMPLAINT')
+                                            TextButton.icon(
+                                              icon: const Icon(
+                                                Icons.comment_outlined,
+                                                size: 18,
+                                              ),
+                                              label: Text(
+                                                'Comments (${post['comments']?.length ?? 0})',
+                                              ),
+                                              style: TextButton.styleFrom(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                    ),
+                                                minimumSize: const Size(0, 36),
+                                              ),
+                                              onPressed: () =>
+                                                  _showCommentsSheet(post),
+                                            ),
+                                        ],
                                       ),
+                                    ),
                                     Container(
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 10,
                                         vertical: 4,
                                       ),
+                                      margin: const EdgeInsets.only(left: 8),
                                       decoration: BoxDecoration(
                                         color: theme
                                             .colorScheme
