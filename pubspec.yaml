@@ -46,6 +46,9 @@ dependencies:
   firebase_core: ^4.12.1
   firebase_messaging: ^16.4.3
   shared_preferences: ^2.5.5
+  flutter_local_notifications: ^22.2.0
+  timezone: ^0.11.1
+  lottie: ^3.3.3
 
 # Configure App Icons
 flutter_launcher_icons:
@@ -79,6 +82,8 @@ flutter:
   assets:
     - assets/images/app_logo.png
     - assets/images/splash_logo.png
+    - assets/lottie/coming_soon.json
+    - assets/lottie/coming_soon_dark.json
     - .env
 
   # An image asset can refer to one or more resolution-specific "variants", see

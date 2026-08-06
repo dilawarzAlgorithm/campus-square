@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:campus_square/core/services/secure_storage_service.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 
@@ -31,23 +33,62 @@ class ApiClient {
     }
 
     http.Response response;
-    switch (method.toUpperCase()) {
-      case "POST":
-        response = await http.post(url, headers: finalHeaders, body: body);
-        break;
-      case "DELETE":
-        response = await http.delete(url, headers: finalHeaders, body: body);
-        break;
-      case "PUT":
-        response = await http.put(url, headers: finalHeaders, body: body);
-        break;
-      case "PATCH":
-        response = await http.patch(url, headers: finalHeaders, body: body);
-        break;
-      case "GET":
-      default:
-        response = await http.get(url, headers: finalHeaders);
-        break;
+
+    try {
+      switch (method.toUpperCase()) {
+        case "POST":
+          response = await http
+              .post(url, headers: finalHeaders, body: body)
+              .timeout(const Duration(seconds: 15));
+          break;
+        case "DELETE":
+          response = await http
+              .delete(url, headers: finalHeaders, body: body)
+              .timeout(const Duration(seconds: 15));
+          break;
+        case "PUT":
+          response = await http
+              .put(url, headers: finalHeaders, body: body)
+              .timeout(const Duration(seconds: 15));
+          break;
+        case "PATCH":
+          response = await http
+              .patch(url, headers: finalHeaders, body: body)
+              .timeout(const Duration(seconds: 15));
+          break;
+        case "GET":
+        default:
+          response = await http
+              .get(url, headers: finalHeaders)
+              .timeout(const Duration(seconds: 10));
+          if (response.statusCode == 200) {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('CACHE_$path', response.body);
+          }
+          break;
+      }
+    } on SocketException catch (_) {
+      if (!context.mounted) {
+        return await _handleOfflineFallback(null, path, method);
+      }
+      return await _handleOfflineFallback(context, path, method);
+    } on TimeoutException catch (_) {
+      if (!context.mounted) {
+        return await _handleOfflineFallback(
+          null,
+          path,
+          method,
+          isTimeout: true,
+        );
+      }
+      return await _handleOfflineFallback(
+        context,
+        path,
+        method,
+        isTimeout: true,
+      );
+    } catch (e) {
+      rethrow;
     }
 
     if (response.statusCode == 403) {
@@ -55,53 +96,26 @@ class ApiClient {
         final responseBody = jsonDecode(response.body);
         final detail = responseBody['detail']?.toString().toLowerCase() ?? '';
         if (detail.contains('suspended') || detail.contains('blocked')) {
-          debugPrint("Account suspended. Forcing logout.");
           if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Your account has been suspended by a Community Head.',
-                ),
-                backgroundColor: Colors.red,
-                duration: Duration(seconds: 4),
-              ),
-            );
             Provider.of<CampusSquareAuth>(
               context,
               listen: false,
             ).logoutForcefully();
           }
         }
-      } catch (e) {
-        debugPrint("Could not parse 403 body: $e");
-      }
+      } catch (_) {}
       return response;
     }
 
     if (response.statusCode == 401) {
-      debugPrint("Access token expired. Attempting silent token rotation...");
       final refreshSuccess = await _rotateTokensSafe();
-
       if (refreshSuccess) {
         final newAccessToken = await _storage.getAccessToken();
         if (newAccessToken != null) {
           finalHeaders["Authorization"] = "Bearer $newAccessToken";
-          switch (method.toUpperCase()) {
-            case "POST":
-              return await http.post(url, headers: finalHeaders, body: body);
-            case "DELETE":
-              return await http.delete(url, headers: finalHeaders, body: body);
-            case "PUT":
-              return await http.put(url, headers: finalHeaders, body: body);
-            case "PATCH":
-              return await http.patch(url, headers: finalHeaders, body: body);
-            case "GET":
-            default:
-              return await http.get(url, headers: finalHeaders);
-          }
+          return await http.get(url, headers: finalHeaders);
         }
       } else {
-        debugPrint("Refresh token expired. Forcing user logout.");
         if (context.mounted) {
           Provider.of<CampusSquareAuth>(
             context,
@@ -112,6 +126,50 @@ class ApiClient {
     }
 
     return response;
+  }
+
+  Future<http.Response> _handleOfflineFallback(
+    BuildContext? context,
+    String path,
+    String method, {
+    bool isTimeout = false,
+  }) async {
+    if (method.toUpperCase() == 'GET') {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedData = prefs.getString('CACHE_$path');
+
+      if (cachedData != null) {
+        if (context != null && context.mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                isTimeout
+                    ? 'Slow internet. Loading offline data.'
+                    : 'You are offline. Showing cached data.',
+              ),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+        return http.Response(
+          cachedData,
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+    }
+
+    if (context != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No internet connection. Please check your network.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+    return http.Response('{"detail": "No internet connection"}', 503);
   }
 
   Future<http.Response> authenticatedMultipartRequest(
@@ -129,41 +187,23 @@ class ApiClient {
     }
 
     request.files.add(await http.MultipartFile.fromPath(fileField, filePath));
-    var streamedResponse = await request.send();
-    var response = await http.Response.fromStream(streamedResponse);
 
-    if (response.statusCode == 401) {
-      debugPrint("Access token expired during upload. Rotating...");
-      final refreshSuccess = await _rotateTokensSafe();
-
-      if (refreshSuccess) {
-        final newAccessToken = await _storage.getAccessToken();
-        if (newAccessToken != null) {
-          var newRequest = http.MultipartRequest('POST', url);
-          newRequest.headers["Authorization"] = "Bearer $newAccessToken";
-          newRequest.files.add(
-            await http.MultipartFile.fromPath(fileField, filePath),
-          );
-          var newStreamed = await newRequest.send();
-          return await http.Response.fromStream(newStreamed);
-        }
-      } else {
-        if (context.mounted) {
-          Provider.of<CampusSquareAuth>(
-            context,
-            listen: false,
-          ).logoutForcefully();
-        }
-      }
+    try {
+      var streamedResponse = await request.send().timeout(
+        const Duration(seconds: 30),
+      );
+      var response = await http.Response.fromStream(streamedResponse);
+      return response;
+    } catch (_) {
+      return http.Response(
+        '{"detail": "Upload failed. Poor internet connection."}',
+        503,
+      );
     }
-
-    return response;
   }
 
   Future<bool> _rotateTokensSafe() async {
-    if (_isRefreshing && _refreshFuture != null) {
-      return await _refreshFuture!;
-    }
+    if (_isRefreshing && _refreshFuture != null) return await _refreshFuture!;
     _isRefreshing = true;
     _refreshFuture = _rotateTokens();
     final result = await _refreshFuture!;
@@ -177,16 +217,17 @@ class ApiClient {
 
     try {
       final url = Uri.parse("$baseUrl/api/auth/refresh");
-      final response = await http.post(
-        url,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"refresh_token": refreshToken}),
-      );
+      final response = await http
+          .post(
+            url,
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({"refresh_token": refreshToken}),
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final userProfile = await _storage.getUserProfile() ?? {};
-
         await _storage.saveSession(
           accessToken: data["access_token"],
           refreshToken: data["refresh_token"],
@@ -194,10 +235,7 @@ class ApiClient {
         );
         return true;
       }
-    } catch (e) {
-      debugPrint("Network error during token rotation: $e");
-    }
-
+    } catch (_) {}
     return false;
   }
 }

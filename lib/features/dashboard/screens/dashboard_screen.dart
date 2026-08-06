@@ -8,6 +8,7 @@ import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 import 'package:campus_square/features/vault/screens/vault_screen.dart';
 import 'package:campus_square/features/profile/screens/profile_screen.dart';
 import 'package:campus_square/features/square/screens/square_screen.dart';
+import 'package:campus_square/features/bazaar/screens/bazaar_screen.dart';
 import 'package:campus_square/features/chat/screens/messaging_hub_screen.dart';
 
 class Dashboard extends StatefulWidget {
@@ -24,7 +25,7 @@ class _DashboardState extends State<Dashboard> {
 
   final List<Widget> _screens = [
     const SquareScreen(),
-    const Center(child: Text('Bazaar: Marketplace')),
+    const BazaarScreen(),
     const AcademicVaultScreen(),
     const ProfileScreen(),
   ];

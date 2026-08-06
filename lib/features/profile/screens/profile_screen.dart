@@ -5,6 +5,7 @@ import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 import 'package:campus_square/features/vault/screens/saved_vault_screen.dart';
 import 'package:campus_square/features/profile/screens/full_profile_screen.dart';
 import 'package:campus_square/features/settings/screens/notification_settings_screen.dart';
+import 'package:campus_square/features/timetable/screens/timetable_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -391,6 +392,20 @@ class ProfileScreen extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (context) => const SavedVaultScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const Divider(height: 1, indent: 56),
+                ListTile(
+                  leading: const Icon(Icons.calendar_month_outlined),
+                  title: const Text('My Timetable & Attendance'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const TimetableScreen(),
                       ),
                     );
                   },
