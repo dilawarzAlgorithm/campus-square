@@ -9,10 +9,13 @@ class LocalNotificationService {
 
     final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
         FlutterLocalNotificationsPlugin();
+
     const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+        AndroidInitializationSettings('ic_stat_notification');
+
     const DarwinInitializationSettings initializationSettingsIOS =
         DarwinInitializationSettings();
+
     const InitializationSettings initializationSettings =
         InitializationSettings(
           android: initializationSettingsAndroid,
@@ -26,7 +29,26 @@ class LocalNotificationService {
     debugPrint("Local Notifications Initialized.");
   }
 
+  static Future<void> _requestPermissionsSafely() async {
+    final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+        FlutterLocalNotificationsPlugin();
+
+    await flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.requestNotificationsPermission();
+
+    await flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin
+        >()
+        ?.requestPermissions(alert: true, badge: true, sound: true);
+  }
+
   static Future<void> scheduleClassReminders(List<dynamic> events) async {
+    await _requestPermissionsSafely();
+
     final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
         FlutterLocalNotificationsPlugin();
 
@@ -36,11 +58,15 @@ class LocalNotificationService {
         AndroidNotificationDetails(
           'class_reminders',
           'Class Reminders',
+          icon: 'ic_stat_notification',
           channelDescription:
               'Offline reminders 10 minutes before class starts',
           importance: Importance.max,
           priority: Priority.high,
+          enableVibration: true,
+          playSound: true,
         );
+
     const NotificationDetails platformChannelSpecifics = NotificationDetails(
       android: androidPlatformChannelSpecifics,
     );
@@ -51,31 +77,40 @@ class LocalNotificationService {
       int daysUntil = (event.dayOfWeek - now.weekday) % 7;
       if (daysUntil < 0) daysUntil += 7;
 
-      var nextDate = now.add(Duration(days: daysUntil));
-
       var scheduleTime = DateTime(
-        nextDate.year,
-        nextDate.month,
-        nextDate.day,
+        now.year,
+        now.month,
+        now.day,
         event.startTime.hour,
         event.startTime.minute,
-      ).subtract(const Duration(minutes: 10));
+      ).add(Duration(days: daysUntil)).subtract(const Duration(minutes: 10));
 
       if (scheduleTime.isBefore(now)) {
         scheduleTime = scheduleTime.add(const Duration(days: 7));
       }
 
-      await flutterLocalNotificationsPlugin.zonedSchedule(
-        id: event.id.hashCode,
-        title: 'Upcoming ${event.type}: ${event.title}',
-        body: 'Starts in 10 mins at ${event.location}',
-        scheduledDate: tz.TZDateTime.from(scheduleTime, tz.local),
-        notificationDetails: platformChannelSpecifics,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
-      );
+      final durationUntilAlarm = scheduleTime.difference(now);
+      final tzScheduleTime = tz.TZDateTime.now(
+        tz.local,
+      ).add(durationUntilAlarm);
+
+      final safeId = event.id.hashCode.abs() % 2147483647;
+
+      try {
+        await flutterLocalNotificationsPlugin.zonedSchedule(
+          id: safeId,
+          title: 'Upcoming ${event.type}:${event.title}',
+          body: 'Starts in 10 mins at ${event.location}',
+          scheduledDate: tzScheduleTime,
+          notificationDetails: platformChannelSpecifics,
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+        );
+      } catch (e) {
+        debugPrint("Failed to schedule alarm for ${event.title}:$e");
+      }
     }
 
-    debugPrint("Offline Reminders Scheduled!");
+    debugPrint("Offline Reminders Scheduled Successfully!");
   }
 }

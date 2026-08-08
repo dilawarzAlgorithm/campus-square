@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:campus_square/core/theme/app_theme.dart';
 import 'package:campus_square/core/theme/theme_provider.dart';
 import 'package:campus_square/core/services/notification_service.dart';
+import 'package:campus_square/core/services/local_notification_service.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 import 'package:campus_square/shared/widgets/auth_route_guard.dart';
 
@@ -13,6 +14,11 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
   await Firebase.initializeApp();
+  try {
+    await LocalNotificationService.initialize();
+  } catch (e) {
+    debugPrint("Local Notifications failed to initialize: $e");
+  }
 
   runApp(
     MultiProvider(
