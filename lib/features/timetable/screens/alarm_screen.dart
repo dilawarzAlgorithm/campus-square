@@ -2,8 +2,43 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-class AlarmScreen extends StatelessWidget {
+class AlarmScreen extends StatefulWidget {
   const AlarmScreen({super.key});
+
+  @override
+  State<AlarmScreen> createState() => _AlarmScreenState();
+}
+
+class _AlarmScreenState extends State<AlarmScreen> {
+  static const platform = MethodChannel('campus_square/alarm_control');
+
+  @override
+  void initState() {
+    super.initState();
+    _enableLockScreen();
+  }
+
+  Future<void> _enableLockScreen() async {
+    try {
+      await platform.invokeMethod('enableLockScreen');
+    } catch (e) {
+      debugPrint("Failed to enable lock screen: $e");
+    }
+  }
+
+  Future<void> _disableLockScreenAndClose() async {
+    try {
+      await platform.invokeMethod('disableLockScreen');
+    } catch (e) {
+      debugPrint("Failed to disable lock screen: $e");
+    }
+
+    final FlutterLocalNotificationsPlugin plugin =
+        FlutterLocalNotificationsPlugin();
+    await plugin.cancelAll();
+
+    SystemNavigator.pop();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +65,6 @@ class AlarmScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 50),
-
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.redAccent,
@@ -42,13 +76,7 @@ class AlarmScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(30),
                   ),
                 ),
-                onPressed: () async {
-                  final FlutterLocalNotificationsPlugin plugin =
-                      FlutterLocalNotificationsPlugin();
-                  await plugin.cancelAll();
-
-                  SystemNavigator.pop();
-                },
+                onPressed: _disableLockScreenAndClose,
                 child: const Text(
                   "Turn Off",
                   style: TextStyle(fontSize: 24, color: Colors.white),
