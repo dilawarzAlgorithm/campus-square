@@ -109,7 +109,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _setWallpaper(int index) async {
-    HapticFeedback.lightImpact();
+    HapticFeedback.vibrate();
     setState(() {
       _wallpaperStyle = index;
     });
@@ -342,7 +342,7 @@ class _ChatScreenState extends State<ChatScreen> {
             if (mounted && !_isDisposing) {
               if (_scrollController.hasClients &&
                   _scrollController.offset < 100) {
-                HapticFeedback.lightImpact();
+                HapticFeedback.vibrate();
               }
 
               setState(() {
@@ -586,7 +586,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     if (text.isEmpty && file == null) return;
 
-    HapticFeedback.lightImpact();
+    HapticFeedback.vibrate();
 
     if (_editingMessage != null) {
       final payload = {
@@ -772,7 +772,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _showDeleteDialog() {
-    HapticFeedback.mediumImpact();
+    HapticFeedback.vibrate();
     bool canDeleteForEveryone = true;
     for (String id in _selectedMessageIds) {
       final msg = _messages.firstWhere((m) => (m['id'] ?? m['local_id']) == id);
@@ -824,7 +824,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _executeDelete({required bool forEveryone}) {
-    HapticFeedback.mediumImpact();
+    HapticFeedback.vibrate();
     for (String id in _selectedMessageIds) {
       final msg = _messages.firstWhere((m) => (m['id'] ?? m['local_id']) == id);
 
@@ -1545,7 +1545,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     icon: const Icon(Icons.wallpaper_rounded),
                     tooltip: 'Change Wallpaper',
                     onPressed: () {
-                      HapticFeedback.lightImpact();
+                      HapticFeedback.vibrate();
                       _showWallpaperPicker(_getWallpapers(Theme.of(context)));
                     },
                   ),
@@ -1749,7 +1749,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                     behavior: HitTestBehavior.opaque,
                                     onLongPress: () {
                                       if (isDeleted) return;
-                                      HapticFeedback.selectionClick();
+                                      HapticFeedback.vibrate();
                                       setState(() {
                                         if (isSelected) {
                                           _selectedMessageIds.remove(msgId);
@@ -1761,7 +1761,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                     onTap: () {
                                       if (inSelectionMode) {
                                         if (isDeleted) return;
-                                        HapticFeedback.selectionClick();
+                                        HapticFeedback.vibrate();
                                         setState(() {
                                           if (isSelected) {
                                             _selectedMessageIds.remove(msgId);
@@ -1777,7 +1777,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                       confirmDismiss: (direction) async {
                                         if (!isDeleted) {
                                           setState(() => _replyingTo = msg);
-                                          HapticFeedback.lightImpact();
+                                          HapticFeedback.vibrate();
                                         }
                                         return false;
                                       },
@@ -2222,7 +2222,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                                       color: Colors.blueGrey,
                                                     ),
                                                     onPressed: () {
-                                                      HapticFeedback.selectionClick();
+                                                      HapticFeedback.vibrate();
                                                       _showAttachmentOptions();
                                                     },
                                                   ),
