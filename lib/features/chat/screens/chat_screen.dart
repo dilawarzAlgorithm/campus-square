@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import 'package:campus_square/core/network/api_client.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
@@ -441,11 +442,13 @@ class _ChatScreenState extends State<ChatScreen> {
           }
         },
         onError: (error) {
+          debugPrint("WebSocket Error: $error");
           if (mounted && !_isDisposing) setState(() => _isConnected = false);
         },
         onDone: () {
           if (mounted && !_isDisposing) setState(() => _isConnected = false);
         },
+        cancelOnError: true,
       );
     } catch (e) {
       if (mounted && !_isDisposing) setState(() => _isConnected = false);
@@ -509,6 +512,7 @@ class _ChatScreenState extends State<ChatScreen> {
         setState(() => _selectedAttachment = result.files.first);
       }
     } catch (e) {
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Failed to pick file.'),
@@ -2351,6 +2355,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 bottom: 110,
                 right: 16,
                 child: FloatingActionButton.small(
+                  heroTag: 'chat_fab',
                   onPressed: () {
                     _scrollController.animateTo(
                       0.0,
@@ -2451,31 +2456,27 @@ class _ExpandableMessageTextState extends State<ExpandableMessageText> {
                     child: InteractiveViewer(
                       minScale: 0.5,
                       maxScale: 4.0,
-                      child: Image.network(
-                        url,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return const Center(
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
+                      child: CachedNetworkImage(
+                        imageUrl: url,
+                        cacheKey: url.split('?').first,
+                        placeholder: (context, url) => const Center(
+                          child: CircularProgressIndicator(color: Colors.white),
+                        ),
+                        errorWidget: (context, url, error) => const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.broken_image,
+                              color: Colors.white54,
+                              size: 64,
                             ),
-                          );
-                        },
-                        // errorBuilder: (c, e, s) => const Column(
-                        //  mainAxisAlignment: MainAxisAlignment.center,
-                        //  children: [
-                        //    Icon(
-                        //      Icons.broken_image,
-                        //      color: Colors.white54,
-                        //      size: 64,
-                        //    ),
-                        //    SizedBox(height: 16),
-                        //    Text(
-                        //      "Failed to load image",
-                        //      style: TextStyle(color: Colors.white54),
-                        //    ),
-                        //  ],
-                        // ),
+                            SizedBox(height: 16),
+                            Text(
+                              "Failed to load image",
+                              style: TextStyle(color: Colors.white54),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -2503,10 +2504,13 @@ class _ExpandableMessageTextState extends State<ExpandableMessageText> {
                   constraints: BoxConstraints(
                     maxHeight: MediaQuery.of(context).size.height * 0.35,
                   ),
-                  child: Image.network(
-                    url,
+                  child: CachedNetworkImage(
+                    imageUrl: url,
+                    cacheKey: url.split('?').first,
                     fit: BoxFit.contain,
-                    errorBuilder: (c, e, s) => const Padding(
+                    placeholder: (context, url) =>
+                        const Center(child: CircularProgressIndicator()),
+                    errorWidget: (context, url, error) => const Padding(
                       padding: EdgeInsets.all(16.0),
                       child: Icon(Icons.broken_image, color: Colors.grey),
                     ),
@@ -2854,6 +2858,7 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
           }
         });
 
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -2863,6 +2868,7 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
           ),
         );
       } else {
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Failed to update block status. Server error.'),
@@ -2872,6 +2878,7 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
       }
     } catch (e) {
       if (!mounted) return;
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Failed to update block status.'),
@@ -2918,6 +2925,7 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
                         );
                         if (context.mounted) {
                           Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).clearSnackBars();
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text("Group icon updated locally."),
@@ -3343,36 +3351,19 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
                     ),
                     clipBehavior: Clip.antiAlias,
                     child: isImage
-                        ? Image.network(
-                            url,
+                        ? CachedNetworkImage(
+                            imageUrl: url,
+                            cacheKey: url.split('?').first,
                             fit: BoxFit.cover,
-                            loadingBuilder:
-                                (
-                                  BuildContext context,
-                                  Widget child,
-                                  ImageChunkEvent? loadingProgress,
-                                ) {
-                                  if (loadingProgress == null) return child;
-                                  return Center(
-                                    child: CircularProgressIndicator(
-                                      value:
-                                          loadingProgress.expectedTotalBytes !=
-                                              null
-                                          ? loadingProgress
-                                                    .cumulativeBytesLoaded /
-                                                loadingProgress
-                                                    .expectedTotalBytes!
-                                          : null,
-                                    ),
-                                  );
-                                },
-                            errorBuilder: (context, error, stackTrace) =>
-                                const Center(
-                                  child: Icon(
-                                    Icons.broken_image,
-                                    color: Colors.grey,
-                                  ),
-                                ),
+                            placeholder: (context, url) => const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                            errorWidget: (context, url, error) => const Center(
+                              child: Icon(
+                                Icons.broken_image,
+                                color: Colors.grey,
+                              ),
+                            ),
                           )
                         : Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -3448,6 +3439,7 @@ class _ForwardSheetState extends State<_ForwardSheet> {
 
       if (context.mounted) {
         Navigator.pop(context);
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Messages forwarded successfully'),
@@ -3457,6 +3449,7 @@ class _ForwardSheetState extends State<_ForwardSheet> {
       }
     } catch (e) {
       if (context.mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Failed to forward some messages'),

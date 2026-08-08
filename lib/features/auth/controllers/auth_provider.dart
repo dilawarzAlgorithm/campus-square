@@ -5,6 +5,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:campus_square/core/services/secure_storage_service.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 enum ApplicationState { initializing, unauthenticated, authenticated }
 
@@ -44,6 +45,7 @@ class CampusSquareAuth extends ChangeNotifier {
   Future<void> checkActiveSession() async {
     try {
       await Future.delayed(const Duration(milliseconds: 1000));
+
       final refreshToken = await _storage.getRefreshToken();
       final profile = await _storage.getUserProfile();
 
@@ -67,14 +69,14 @@ class CampusSquareAuth extends ChangeNotifier {
     }
   }
 
-  Future<void> clearTopics() async {
+  void clearTopics() {
     try {
       final fcm = FirebaseMessaging.instance;
       final instId = _user?['institution_id'] ?? '';
       if (instId.isNotEmpty) {
-        await fcm.unsubscribeFromTopic('${instId}_all_notices');
-        await fcm.unsubscribeFromTopic('${instId}_important_notices');
-        await fcm.unsubscribeFromTopic('${instId}_resources');
+        fcm.unsubscribeFromTopic('${instId}_all_notices');
+        fcm.unsubscribeFromTopic('${instId}_important_notices');
+        fcm.unsubscribeFromTopic('${instId}_resources');
       }
     } catch (_) {}
   }
@@ -133,7 +135,6 @@ class CampusSquareAuth extends ChangeNotifier {
   }) async {
     try {
       final url = Uri.parse("$baseUrl/api/auth/register");
-
       final bodyMap = {
         "email": email,
         "password": password,
@@ -175,7 +176,6 @@ class CampusSquareAuth extends ChangeNotifier {
       );
 
       final data = jsonDecode(response.body);
-
       if (response.statusCode == 200) {
         return data["success"] == true;
       } else {
@@ -199,7 +199,6 @@ class CampusSquareAuth extends ChangeNotifier {
       );
 
       final data = jsonDecode(response.body);
-
       if (response.statusCode == 200) {
         return true;
       } else {
@@ -229,14 +228,15 @@ class CampusSquareAuth extends ChangeNotifier {
           refreshToken: data["refresh_token"],
           userProfile: data["user"],
         );
+
         _user = data["user"];
         _status = ApplicationState.authenticated;
 
         final prefs = await SharedPreferences.getInstance();
         final isMessageEnabled = prefs.getBool('fcm_message_hub') ?? true;
         final allEnabled = prefs.getBool('fcm_all_notifications') ?? true;
-        await updateFCMTokenStatus(allEnabled && isMessageEnabled);
-        await syncTopics();
+        updateFCMTokenStatus(allEnabled && isMessageEnabled);
+        syncTopics();
 
         notifyListeners();
         return true;
@@ -270,14 +270,15 @@ class CampusSquareAuth extends ChangeNotifier {
           refreshToken: data["refresh_token"],
           userProfile: data["user"],
         );
+
         _user = data["user"];
         _status = ApplicationState.authenticated;
 
         final prefs = await SharedPreferences.getInstance();
         final isMessageEnabled = prefs.getBool('fcm_message_hub') ?? true;
         final allEnabled = prefs.getBool('fcm_all_notifications') ?? true;
-        await updateFCMTokenStatus(allEnabled && isMessageEnabled);
-        await syncTopics();
+        updateFCMTokenStatus(allEnabled && isMessageEnabled);
+        syncTopics();
 
         notifyListeners();
         return AuthResult(success: true, message: "Logged in successfully.");
@@ -295,6 +296,7 @@ class CampusSquareAuth extends ChangeNotifier {
     _user = updatedProfile;
     final accessToken = await _storage.getAccessToken();
     final refreshToken = await _storage.getRefreshToken();
+
     if (accessToken != null && refreshToken != null) {
       await _storage.saveSession(
         accessToken: accessToken,
@@ -385,17 +387,31 @@ class CampusSquareAuth extends ChangeNotifier {
     }
   }
 
+  Future<void> _wipeAllData() async {
+    try {
+      clearTopics();
+      await _storage.clearSession();
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+
+      await DefaultCacheManager().emptyCache();
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+    } catch (e) {
+      debugPrint("Error wiping data during logout: $e");
+    }
+  }
+
   Future<void> logout() async {
-    await clearTopics();
-    await _storage.clearSession();
+    await _wipeAllData();
     _user = null;
     _status = ApplicationState.unauthenticated;
     notifyListeners();
   }
 
   void logoutForcefully() {
-    clearTopics();
-    _storage.clearSession();
+    _wipeAllData();
     _user = null;
     _status = ApplicationState.unauthenticated;
     notifyListeners();

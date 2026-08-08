@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import 'package:campus_square/core/network/api_client.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
@@ -48,16 +49,25 @@ class _SquareScreenState extends State<SquareScreen> {
     super.initState();
     final auth = context.read<CampusSquareAuth>();
     _apiClient = ApiClient(baseUrl: auth.baseUrl);
-    _fetchPosts();
+    _loadCacheThenFetch();
   }
 
-  Future<void> _fetchPosts() async {
-    setState(() => _isLoading = true);
-    String endpoint = "/api/square/notices";
-    if (_selectedCategory != null) {
-      endpoint += "?category=$_selectedCategory";
+  Future<void> _loadCacheThenFetch() async {
+    String endpoint =
+        "/api/square/notices${_selectedCategory != null ? '?category=$_selectedCategory' : ''}";
+
+    final cachedString = await _apiClient.getCachedData(endpoint);
+    if (cachedString != null && mounted) {
+      setState(() {
+        _posts = jsonDecode(cachedString);
+        _isLoading = false;
+      });
     }
 
+    _fetchPosts(endpoint);
+  }
+
+  Future<void> _fetchPosts(String endpoint) async {
     try {
       final response = await _apiClient.authenticatedRequest(
         context,
@@ -69,6 +79,7 @@ class _SquareScreenState extends State<SquareScreen> {
         if (mounted) {
           setState(() {
             _posts = jsonDecode(response.body);
+            _isLoading = false;
           });
         }
       }
@@ -88,6 +99,7 @@ class _SquareScreenState extends State<SquareScreen> {
         method: "POST",
         body: jsonEncode({"vote_type": voteType}),
       );
+
       if (response.statusCode == 200) {
         final updatedPost = jsonDecode(response.body);
         if (mounted) {
@@ -179,6 +191,7 @@ class _SquareScreenState extends State<SquareScreen> {
         }
         if (!mounted) return;
         if (showSuccess) {
+          ScaffoldMessenger.of(context).clearSnackBars();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Post deleted.'),
@@ -213,6 +226,7 @@ class _SquareScreenState extends State<SquareScreen> {
             onPressed: () {
               Navigator.pop(dialogCtx);
               _deletePost(post['id'], showSuccess: false);
+              ScaffoldMessenger.of(context).clearSnackBars();
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
@@ -277,8 +291,8 @@ class _SquareScreenState extends State<SquareScreen> {
     bool isInputEmpty = true;
     String? replyingToId;
     String? replyingToName;
-    final ScrollController listScrollController = ScrollController();
 
+    final ScrollController listScrollController = ScrollController();
     final currentUser = context.read<CampusSquareAuth>().user;
     final currentUserId = currentUser?['id'];
     final userRole = currentUser?['role'] ?? 'STUDENT';
@@ -674,7 +688,10 @@ class _SquareScreenState extends State<SquareScreen> {
 
                                                 if (response.statusCode ==
                                                     201) {
-                                                  await _fetchPosts();
+                                                  await _fetchPosts(
+                                                    "/api/square/notices${_selectedCategory != null ? '?category=$_selectedCategory' : ''}",
+                                                  );
+
                                                   final updatedPost = _posts
                                                       .firstWhere(
                                                         (p) =>
@@ -802,6 +819,7 @@ class _SquareScreenState extends State<SquareScreen> {
                 onTap: () {
                   Clipboard.setData(ClipboardData(text: c['text']));
                   Navigator.pop(actCtx);
+                  ScaffoldMessenger.of(context).clearSnackBars();
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('Comment copied to clipboard'),
@@ -857,8 +875,11 @@ class _SquareScreenState extends State<SquareScreen> {
                   "/api/square/comments/${c['id']}",
                   method: "DELETE",
                 );
+
                 if (response.statusCode == 200) {
-                  await _fetchPosts();
+                  await _fetchPosts(
+                    "/api/square/notices${_selectedCategory != null ? '?category=$_selectedCategory' : ''}",
+                  );
                   final updatedPost = _posts.firstWhere(
                     (p) => p['id'] == postId,
                   );
@@ -868,6 +889,7 @@ class _SquareScreenState extends State<SquareScreen> {
                   _showCommentsSheet(updatedPost);
                 } else {
                   if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).clearSnackBars();
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('Failed to delete comment'),
@@ -898,6 +920,7 @@ class _SquareScreenState extends State<SquareScreen> {
     String selectedType = availableCategories.first;
     bool isUrgent = false;
     int urgentHours = 48;
+
     final titleController = TextEditingController();
     final bodyController = TextEditingController();
     PlatformFile? selectedFile;
@@ -1100,7 +1123,6 @@ class _SquareScreenState extends State<SquareScreen> {
                                 }
 
                                 if (!context.mounted) return;
-
                                 final response = await _apiClient
                                     .authenticatedRequest(
                                       context,
@@ -1120,7 +1142,7 @@ class _SquareScreenState extends State<SquareScreen> {
 
                                 if (response.statusCode == 201) {
                                   Navigator.pop(ctx);
-                                  _fetchPosts();
+                                  _loadCacheThenFetch();
                                 } else if (response.statusCode == 422) {
                                   final errorData = jsonDecode(response.body);
                                   if (errorData['detail'] is List) {
@@ -1141,6 +1163,7 @@ class _SquareScreenState extends State<SquareScreen> {
                                   );
                                 }
                               } catch (e) {
+                                ScaffoldMessenger.of(context).clearSnackBars();
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
@@ -1213,6 +1236,7 @@ class _SquareScreenState extends State<SquareScreen> {
 
     return Scaffold(
       floatingActionButton: FloatingActionButton(
+        heroTag: 'square_fab', // Unique tag to prevent crash in IndexedStack
         onPressed: _showCreatePostSheet,
         backgroundColor: theme.colorScheme.primary,
         foregroundColor: Colors.white,
@@ -1241,7 +1265,7 @@ class _SquareScreenState extends State<SquareScreen> {
                     onSelected: (selected) {
                       if (selected) {
                         setState(() => _selectedCategory = null);
-                        _fetchPosts();
+                        _loadCacheThenFetch();
                       }
                     },
                   ),
@@ -1268,7 +1292,7 @@ class _SquareScreenState extends State<SquareScreen> {
                           () =>
                               _selectedCategory = selected ? entry.value : null,
                         );
-                        _fetchPosts();
+                        _loadCacheThenFetch();
                       },
                     ),
                   );
@@ -1298,15 +1322,17 @@ class _SquareScreenState extends State<SquareScreen> {
                     ),
                   )
                 : RefreshIndicator(
-                    onRefresh: _fetchPosts,
+                    onRefresh: () => _fetchPosts(
+                      "/api/square/notices${_selectedCategory != null ? '?category=$_selectedCategory' : ''}",
+                    ),
                     child: ListView.builder(
                       padding: const EdgeInsets.all(16),
                       itemCount: _posts.length,
                       itemBuilder: (context, index) {
                         final post = _posts[index];
                         final author = post['author'];
-                        bool isUrgent = false;
 
+                        bool isUrgent = false;
                         if (post['urgent_until'] != null) {
                           final expireDate = DateTime.parse(
                             post['urgent_until'],
@@ -1485,12 +1511,56 @@ class _SquareScreenState extends State<SquareScreen> {
                                   const SizedBox(height: 12),
                                   ClipRRect(
                                     borderRadius: BorderRadius.circular(12),
-                                    child: Image.network(
-                                      post['image_url'],
+                                    child: CachedNetworkImage(
+                                      imageUrl: post['image_url'],
+                                      cacheKey: post['image_url']
+                                          .split('?')
+                                          .first,
                                       fit: BoxFit.cover,
+                                      fadeInDuration: const Duration(
+                                        milliseconds: 200,
+                                      ),
+                                      placeholder: (context, url) => Container(
+                                        height: 200,
+                                        width: double.infinity,
+                                        color: Colors.grey.withValues(
+                                          alpha: 0.1,
+                                        ),
+                                        child: const Center(
+                                          child: CircularProgressIndicator(),
+                                        ),
+                                      ),
+                                      errorWidget: (context, url, error) =>
+                                          Container(
+                                            height: 200,
+                                            width: double.infinity,
+                                            color: Colors.grey.withValues(
+                                              alpha: 0.1,
+                                            ),
+                                            child: Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                const Icon(
+                                                  Icons.cloud_off,
+                                                  color: Colors.grey,
+                                                  size: 32,
+                                                ),
+                                                const SizedBox(height: 8),
+                                                Text(
+                                                  'Image unavailable offline',
+                                                  style: TextStyle(
+                                                    color: Colors.grey.shade600,
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
                                     ),
                                   ),
                                 ],
+
                                 if (post['file_url'] != null) ...[
                                   const SizedBox(height: 12),
                                   OutlinedButton.icon(
@@ -1641,7 +1711,6 @@ class _SquareScreenState extends State<SquareScreen> {
                                               ),
                                             ),
                                           ],
-
                                           if (isPeerPost) ...[
                                             if (post['category'] == 'ROOMMATE')
                                               TextButton.icon(
@@ -1729,7 +1798,6 @@ class _SquareScreenState extends State<SquareScreen> {
                                                         myProfile?['sleep_schedule'];
                                                     final study =
                                                         myProfile?['study_habits'];
-
                                                     List<String> habits = [];
                                                     if (diet != null &&
                                                         diet
@@ -1778,7 +1846,6 @@ class _SquareScreenState extends State<SquareScreen> {
                                                     if (!context.mounted) {
                                                       return;
                                                     }
-
                                                     if (response.statusCode ==
                                                         200) {
                                                       final conv = jsonDecode(
@@ -1804,6 +1871,9 @@ class _SquareScreenState extends State<SquareScreen> {
                                                       );
                                                       ScaffoldMessenger.of(
                                                         context,
+                                                      ).clearSnackBars();
+                                                      ScaffoldMessenger.of(
+                                                        context,
                                                       ).showSnackBar(
                                                         SnackBar(
                                                           content: Text(
@@ -1823,7 +1893,6 @@ class _SquareScreenState extends State<SquareScreen> {
                                                 },
                                               ),
                                           ],
-
                                           if (!isPeerPost ||
                                               post['category'] == 'COMPLAINT')
                                             TextButton.icon(
@@ -1873,6 +1942,7 @@ class _SquareScreenState extends State<SquareScreen> {
                                               );
                                           final info =
                                               _categoryInfo[category.value];
+
                                           return Row(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [

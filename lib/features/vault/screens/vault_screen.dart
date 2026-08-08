@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:campus_square/core/network/api_client.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 
@@ -35,9 +36,69 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
     _fetchInitialData();
   }
 
+  Future<void> _loadCacheThenFetchResources() async {
+    List<String> queryParams = [];
+    if (_selectedDeptId != null) {
+      queryParams.add("department_id=$_selectedDeptId");
+    }
+    if (_filterSemester != null) queryParams.add("semester=$_filterSemester");
+    if (_filterType != null) queryParams.add("resource_type=$_filterType");
+    queryParams.add("sort_by=$_sortBy");
+
+    String query = queryParams.isNotEmpty ? "?${queryParams.join('&')}" : "";
+    String endpoint = "/api/vault/resources$query";
+
+    final cachedString = await _apiClient.getCachedData(endpoint);
+    if (cachedString != null && mounted) {
+      setState(() {
+        _resources = jsonDecode(cachedString);
+        _isLoading = false;
+      });
+    }
+
+    if (!mounted) return;
+
+    try {
+      final resResponse = await _apiClient.authenticatedRequest(
+        context,
+        endpoint,
+        method: "GET",
+      );
+
+      if (resResponse.statusCode == 200 && mounted) {
+        setState(() {
+          _resources = jsonDecode(resResponse.body);
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching fresh resources: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _fetchInitialData() async {
     setState(() => _isLoading = true);
+
     try {
+      final cachedDepts = await _apiClient.getCachedData(
+        "/api/vault/departments",
+      );
+      if (cachedDepts != null && mounted) {
+        _departments = jsonDecode(cachedDepts);
+        _setDefaultDept();
+      }
+
+      final cachedEnums = await _apiClient.getCachedData(
+        "/api/utils/get-enums",
+      );
+      if (cachedEnums != null && mounted) {
+        _parseEnums(cachedEnums);
+      }
+
+      if (!mounted) return;
+
       final deptResponse = await _apiClient.authenticatedRequest(
         context,
         "/api/vault/departments",
@@ -53,27 +114,12 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
       );
 
       if (deptResponse.statusCode == 200) {
-        final decoded = jsonDecode(deptResponse.body);
-        _departments = decoded;
-        if (_departments.isNotEmpty) {
-          if (!mounted) return;
-          final currentUser = context.read<CampusSquareAuth>().user;
-          final userDeptId = currentUser?['department_id'];
-          if (userDeptId != null &&
-              _departments.any((d) => d['id'] == userDeptId)) {
-            _selectedDeptId = userDeptId;
-          } else {
-            _selectedDeptId = _departments.first["id"];
-          }
-        }
+        _departments = jsonDecode(deptResponse.body);
+        _setDefaultDept();
       }
 
       if (enumResponse.statusCode == 200) {
-        final decodedEnums = jsonDecode(enumResponse.body);
-        final resTypeMap = decodedEnums["ResourceType"]["values"] as Map;
-        _resourceTypes = resTypeMap.values.map((e) => e.toString()).toList();
-        final semMap = decodedEnums["Semester"]["values"] as Map;
-        _semesters = semMap.values.map((e) => int.parse(e.toString())).toList();
+        _parseEnums(enumResponse.body);
       }
 
       if (!mounted) return;
@@ -83,12 +129,13 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
         "/api/vault/saved-resource-ids",
         method: "GET",
       );
+
       if (savedResponse.statusCode == 200) {
         final List<dynamic> savedIds = jsonDecode(savedResponse.body);
         _savedResourceIds = savedIds.map((e) => e.toString()).toSet();
       }
 
-      await _fetchResources();
+      await _loadCacheThenFetchResources();
     } catch (e) {
       debugPrint("Vault fetch error: $e");
     } finally {
@@ -96,34 +143,26 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
     }
   }
 
-  Future<void> _fetchResources() async {
-    List<String> queryParams = [];
-    if (_selectedDeptId != null) {
-      queryParams.add("department_id=$_selectedDeptId");
-    }
-    if (_filterSemester != null) queryParams.add("semester=$_filterSemester");
-    if (_filterType != null) queryParams.add("resource_type=$_filterType");
-    queryParams.add("sort_by=$_sortBy");
-
-    String query = queryParams.isNotEmpty ? "?${queryParams.join('&')}" : "";
-
-    try {
-      final resResponse = await _apiClient.authenticatedRequest(
-        context,
-        "/api/vault/resources$query",
-        method: "GET",
-      );
-
-      if (resResponse.statusCode == 200) {
-        if (mounted) {
-          setState(() {
-            _resources = jsonDecode(resResponse.body);
-          });
-        }
+  void _setDefaultDept() {
+    if (_departments.isNotEmpty) {
+      final currentUser = context.read<CampusSquareAuth>().user;
+      final userDeptId = currentUser?['department_id'];
+      if (userDeptId != null &&
+          _departments.any((d) => d['id'] == userDeptId)) {
+        _selectedDeptId = userDeptId;
+      } else {
+        _selectedDeptId = _departments.first["id"];
       }
-    } catch (e) {
-      debugPrint("Error fetching resources: $e");
     }
+  }
+
+  void _parseEnums(String jsonBody) {
+    final decodedEnums = jsonDecode(jsonBody);
+    final resTypeMap = decodedEnums["ResourceType"]["values"] as Map;
+    _resourceTypes = resTypeMap.values.map((e) => e.toString()).toList();
+
+    final semMap = decodedEnums["Semester"]["values"] as Map;
+    _semesters = semMap.values.map((e) => int.parse(e.toString())).toList();
   }
 
   Future<void> _voteResource(String resourceId, String voteType) async {
@@ -134,6 +173,7 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
         method: "POST",
         body: jsonEncode({"vote_type": voteType}),
       );
+
       if (response.statusCode == 200) {
         final updatedResource = jsonDecode(response.body);
         if (mounted) {
@@ -153,7 +193,6 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
 
   Future<void> _toggleSaveResource(String resourceId) async {
     final isSaved = _savedResourceIds.contains(resourceId);
-
     setState(() {
       if (isSaved) {
         _savedResourceIds.remove(resourceId);
@@ -168,6 +207,7 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
         "/api/vault/resources/$resourceId/save",
         method: "POST",
       );
+
       if (response.statusCode != 200) {
         setState(() {
           if (isSaved) {
@@ -200,16 +240,18 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
 
       if (response.statusCode == 200) {
         if (!mounted) return;
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Resource deleted successfully.'),
             backgroundColor: Colors.green,
           ),
         );
-        _fetchResources();
+        _loadCacheThenFetchResources();
       } else {
         final error = jsonDecode(response.body);
         if (!mounted) return;
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(error['detail'] ?? 'Failed to delete resource.'),
@@ -244,7 +286,7 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
     );
 
     if (result == true) {
-      _fetchResources();
+      _loadCacheThenFetchResources();
     }
   }
 
@@ -341,6 +383,7 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
 
   void _navigateToUploadScreen() async {
     if (_departments.isEmpty) {
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -351,7 +394,6 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
       );
       return;
     }
-
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -366,7 +408,7 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
     );
 
     if (result == true) {
-      _fetchResources();
+      _loadCacheThenFetchResources();
     }
   }
 
@@ -434,17 +476,15 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      urlString,
+                    child: CachedNetworkImage(
+                      imageUrl: urlString,
+                      cacheKey: urlString.split('?').first,
                       fit: BoxFit.contain,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return const Padding(
-                          padding: EdgeInsets.all(32.0),
-                          child: CircularProgressIndicator(),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) =>
+                      placeholder: (context, url) => const Padding(
+                        padding: EdgeInsets.all(32.0),
+                        child: CircularProgressIndicator(),
+                      ),
+                      errorWidget: (context, url, error) =>
                           const Text("Failed to load image preview."),
                     ),
                   ),
@@ -480,6 +520,7 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
   }) async {
     Uri url = Uri.parse(urlString);
     LaunchMode mode = LaunchMode.externalApplication;
+
     if (inAppPreview) {
       mode = LaunchMode.inAppBrowserView;
     }
@@ -495,6 +536,7 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
     } catch (e) {
       debugPrint("Error opening file: $e");
       if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
@@ -629,7 +671,7 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                             onPressed: () {
                               Navigator.pop(ctx);
                               setState(() => _isLoading = true);
-                              _fetchResources().then(
+                              _loadCacheThenFetchResources().then(
                                 (_) => setState(() => _isLoading = false),
                               );
                             },
@@ -663,6 +705,7 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
 
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'vault_fab',
         onPressed: _navigateToUploadScreen,
         icon: const Icon(Icons.cloud_upload_outlined),
         label: const Text("Upload"),
@@ -702,7 +745,7 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                               _selectedDeptId = val;
                               _isLoading = true;
                             });
-                            _fetchResources().then(
+                            _loadCacheThenFetchResources().then(
                               (_) => setState(() => _isLoading = false),
                             );
                           },
@@ -763,7 +806,7 @@ class _AcademicVaultScreenState extends State<AcademicVaultScreen> {
                     ),
                   )
                 : RefreshIndicator(
-                    onRefresh: _fetchResources,
+                    onRefresh: _loadCacheThenFetchResources,
                     child: ListView.builder(
                       itemCount: _resources.length,
                       padding: const EdgeInsets.all(16),
@@ -989,6 +1032,7 @@ class _EditResourceScreenState extends State<EditResourceScreen> {
 
   Future<void> _submitEdit() async {
     if (_titleController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Title is required.'),
@@ -1019,6 +1063,7 @@ class _EditResourceScreenState extends State<EditResourceScreen> {
 
       if (response.statusCode == 200) {
         if (!mounted) return;
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Resource updated successfully!'),
@@ -1033,6 +1078,7 @@ class _EditResourceScreenState extends State<EditResourceScreen> {
     } catch (e) {
       debugPrint("Update error: $e");
       if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.toString().replaceAll("Exception: ", "")),
@@ -1218,6 +1264,7 @@ class _UploadResourceScreenState extends State<UploadResourceScreen> {
     } catch (e) {
       debugPrint("File picker error: $e");
       if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.toString().replaceAll("Exception: ", "")),
@@ -1234,6 +1281,7 @@ class _UploadResourceScreenState extends State<UploadResourceScreen> {
     if (_titleController.text.trim().isEmpty ||
         _selectedFile == null ||
         _selectedFile!.path == null) {
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Title and a valid file are required.'),
@@ -1283,6 +1331,7 @@ class _UploadResourceScreenState extends State<UploadResourceScreen> {
       if (response.statusCode == 201) {
         if (!mounted) return;
         context.read<CampusSquareAuth>().refreshProfile();
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Resource uploaded successfully!'),
@@ -1297,6 +1346,7 @@ class _UploadResourceScreenState extends State<UploadResourceScreen> {
     } catch (e) {
       debugPrint("Upload error: $e");
       if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.toString().replaceAll("Exception: ", "")),

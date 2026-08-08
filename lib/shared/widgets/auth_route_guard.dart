@@ -18,7 +18,17 @@ class AuthRouteGuard extends StatelessWidget {
     final authState = authProvider.status;
     final user = authProvider.user;
 
-    switch (authState) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      child: _getScreenForState(authState, user),
+    );
+  }
+
+  Widget _getScreenForState(
+    ApplicationState state,
+    Map<String, dynamic>? user,
+  ) {
+    switch (state) {
       case ApplicationState.initializing:
         return const SplashScreen();
       case ApplicationState.unauthenticated:
@@ -27,9 +37,7 @@ class AuthRouteGuard extends StatelessWidget {
         if (user?['requires_password_change'] == true) {
           return const ForcePasswordChangeScreen();
         }
-
         final role = user?['role'] ?? 'STUDENT';
-
         switch (role) {
           case 'ADMIN':
             return const AdminDashboardScreen();

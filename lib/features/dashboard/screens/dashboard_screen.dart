@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:provider/provider.dart';
+
 import 'package:campus_square/core/network/api_client.dart';
 import 'package:campus_square/core/services/notification_service.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
+
 import 'package:campus_square/features/vault/screens/vault_screen.dart';
 import 'package:campus_square/features/profile/screens/profile_screen.dart';
 import 'package:campus_square/features/square/screens/square_screen.dart';
@@ -74,6 +76,25 @@ class _DashboardState extends State<Dashboard> {
         ),
         centerTitle: false,
         actions: [
+          ValueListenableBuilder<bool>(
+            valueListenable: ApiClient.isOfflineNotifier,
+            builder: (context, isOffline, child) {
+              if (isOffline) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8.0),
+                  child: Tooltip(
+                    message: "You are offline. Showing cached data.",
+                    child: Icon(
+                      Icons.wifi_off,
+                      color: Colors.redAccent,
+                      size: 20,
+                    ),
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
           IconButton(
             icon: Badge(
               isLabelVisible:
@@ -111,7 +132,9 @@ class _DashboardState extends State<Dashboard> {
           const SizedBox(width: 8),
         ],
       ),
-      body: _screens[_currentIndex],
+
+      body: IndexedStack(index: _currentIndex, children: _screens),
+
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         type: BottomNavigationBarType.fixed,

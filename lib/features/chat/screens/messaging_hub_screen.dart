@@ -126,8 +126,11 @@ class _MessagingHubScreenState extends State<MessagingHubScreen>
             }
           });
         },
-        onError: (_) {},
+        onError: (error) {
+          debugPrint("Hub WS Error: $error");
+        },
         onDone: () {},
+        cancelOnError: true,
       );
     } catch (e) {
       debugPrint("Hub WS connection error: $e");

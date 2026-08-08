@@ -15,6 +15,10 @@ class ApiClient {
   static bool _isRefreshing = false;
   static Future<bool>? _refreshFuture;
 
+  static final ValueNotifier<bool> isOfflineNotifier = ValueNotifier<bool>(
+    false,
+  );
+
   ApiClient({required this.baseUrl});
 
   Future<http.Response> authenticatedRequest(
@@ -62,6 +66,7 @@ class ApiClient {
               .get(url, headers: finalHeaders)
               .timeout(const Duration(seconds: 10));
           if (response.statusCode == 200) {
+            isOfflineNotifier.value = false;
             final prefs = await SharedPreferences.getInstance();
             await prefs.setString('CACHE_$path', response.body);
           }
@@ -74,19 +79,9 @@ class ApiClient {
       return await _handleOfflineFallback(context, path, method);
     } on TimeoutException catch (_) {
       if (!context.mounted) {
-        return await _handleOfflineFallback(
-          null,
-          path,
-          method,
-          isTimeout: true,
-        );
+        return await _handleOfflineFallback(null, path, method);
       }
-      return await _handleOfflineFallback(
-        context,
-        path,
-        method,
-        isTimeout: true,
-      );
+      return await _handleOfflineFallback(context, path, method);
     } catch (e) {
       rethrow;
     }
@@ -128,31 +123,23 @@ class ApiClient {
     return response;
   }
 
+  Future<String?> getCachedData(String path) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('CACHE_$path');
+  }
+
   Future<http.Response> _handleOfflineFallback(
     BuildContext? context,
     String path,
-    String method, {
-    bool isTimeout = false,
-  }) async {
+    String method,
+  ) async {
     if (method.toUpperCase() == 'GET') {
       final prefs = await SharedPreferences.getInstance();
       final cachedData = prefs.getString('CACHE_$path');
 
       if (cachedData != null) {
-        if (context != null && context.mounted) {
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                isTimeout
-                    ? 'Slow internet. Loading offline data.'
-                    : 'You are offline. Showing cached data.',
-              ),
-              backgroundColor: Colors.orange,
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
+        isOfflineNotifier.value = true;
+
         return http.Response(
           cachedData,
           200,
@@ -161,14 +148,6 @@ class ApiClient {
       }
     }
 
-    if (context != null && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No internet connection. Please check your network.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
     return http.Response('{"detail": "No internet connection"}', 503);
   }
 
