@@ -161,6 +161,7 @@ class _ManageInstitutionsScreenState extends State<ManageInstitutionsScreen> {
                             domainController.text.isEmpty ||
                             headEmailController.text.isEmpty ||
                             headPasswordController.text.isEmpty) {
+                          ScaffoldMessenger.of(context).clearSnackBars();
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Please fill all required fields'),
@@ -198,6 +199,7 @@ class _ManageInstitutionsScreenState extends State<ManageInstitutionsScreen> {
                           if (response.statusCode == 201) {
                             Navigator.pop(ctx);
                             _fetchInstitutions();
+                            ScaffoldMessenger.of(context).clearSnackBars();
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
@@ -213,6 +215,7 @@ class _ManageInstitutionsScreenState extends State<ManageInstitutionsScreen> {
                             );
                           }
                         } catch (e) {
+                          ScaffoldMessenger.of(context).clearSnackBars();
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
@@ -288,6 +291,7 @@ class _ManageInstitutionsScreenState extends State<ManageInstitutionsScreen> {
                 if (response.statusCode == 200) {
                   _fetchInstitutions();
                   if (context.mounted) {
+                    ScaffoldMessenger.of(context).clearSnackBars();
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text('Storage limit updated'),
@@ -312,6 +316,7 @@ class _ManageInstitutionsScreenState extends State<ManageInstitutionsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Manage Institutions')),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'institute_fab',
         onPressed: _showAddInstitutionDialog,
         icon: const Icon(Icons.add_business),
         label: const Text("New Campus"),

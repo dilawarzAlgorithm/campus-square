@@ -60,6 +60,7 @@ class _ManageUsersGlobalScreenState extends State<ManageUsersGlobalScreen> {
       if (response.statusCode == 200) {
         _fetchUsers();
       } else {
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Failed to update status'),

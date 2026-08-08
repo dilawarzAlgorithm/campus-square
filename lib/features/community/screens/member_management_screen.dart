@@ -292,6 +292,7 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
 
   void _showError(String message) {
     if (!mounted) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
@@ -299,6 +300,7 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
 
   void _showSuccess(String message) {
     if (!mounted) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: Colors.green),
     );

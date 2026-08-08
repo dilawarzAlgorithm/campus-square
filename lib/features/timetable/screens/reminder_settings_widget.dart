@@ -43,6 +43,7 @@ class _ReminderSettingsWidgetState extends State<ReminderSettingsWidget> {
     );
 
     if (mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(

@@ -271,6 +271,7 @@ class _TimetableScreenState extends State<TimetableScreen>
     return Scaffold(
       appBar: AppBar(title: const Text('My Timetable')),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'timetable_fab',
         onPressed: _addOrEditEvent,
         backgroundColor: theme.colorScheme.primary,
         foregroundColor: Colors.white,

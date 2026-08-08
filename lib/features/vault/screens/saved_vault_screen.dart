@@ -188,6 +188,7 @@ class _SavedVaultScreenState extends State<SavedVaultScreen> {
     } catch (e) {
       debugPrint("Error opening file: $e");
       if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(

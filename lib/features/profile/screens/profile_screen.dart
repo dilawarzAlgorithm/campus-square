@@ -65,6 +65,7 @@ class ProfileScreen extends StatelessWidget {
                 lastController.text.trim(),
               );
               if (!context.mounted) return;
+              ScaffoldMessenger.of(context).clearSnackBars();
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(

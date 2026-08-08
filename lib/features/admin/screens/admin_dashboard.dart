@@ -351,6 +351,7 @@ class _AdminPanelTabState extends State<_AdminPanelTab> {
                           if (context.mounted) {
                             Navigator.pop(ctx);
                             if (response.statusCode == 200) {
+                              ScaffoldMessenger.of(context).clearSnackBars();
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('Broadcast sent successfully!'),
@@ -358,6 +359,7 @@ class _AdminPanelTabState extends State<_AdminPanelTab> {
                                 ),
                               );
                             } else {
+                              ScaffoldMessenger.of(context).clearSnackBars();
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('Failed to send broadcast.'),
@@ -369,6 +371,7 @@ class _AdminPanelTabState extends State<_AdminPanelTab> {
                         } catch (e) {
                           if (context.mounted) {
                             Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).clearSnackBars();
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text('Error: $e'),

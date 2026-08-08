@@ -380,6 +380,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
                         initialValue: _selectedDeptId,
+                        isExpanded: true,
                         decoration: const InputDecoration(
                           labelText: 'Department',
                           border: OutlineInputBorder(),
@@ -388,13 +389,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ? [
                                 const DropdownMenuItem<String>(
                                   value: null,
-                                  child: Text('No departments available'),
+                                  child: Text(
+                                    'No departments available',
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
                                 ),
                               ]
                             : _departments.map((dept) {
                                 return DropdownMenuItem<String>(
                                   value: dept['id'],
-                                  child: Text(dept['name']),
+                                  child: Text(
+                                    dept['name'],
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 );
                               }).toList(),
                         onChanged: _departments.isEmpty

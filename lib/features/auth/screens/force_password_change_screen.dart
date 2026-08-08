@@ -20,6 +20,7 @@ class _ForcePasswordChangeScreenState extends State<ForcePasswordChangeScreen> {
 
   Future<void> _updatePassword() async {
     if (_newPasswordController.text.length < 8) {
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('New password must be at least 8 characters.'),
@@ -52,6 +53,7 @@ class _ForcePasswordChangeScreenState extends State<ForcePasswordChangeScreen> {
       }
     } catch (e) {
       if (!mounted) return;
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.toString().replaceAll('Exception: ', '')),
