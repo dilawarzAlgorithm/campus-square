@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:campus_square/core/services/local_notification_service.dart';
+import 'package:campus_square/features/timetable/screens/reminder_settings_widget.dart';
 
 class TimetableEvent {
   final String id;
@@ -99,7 +100,12 @@ class _TimetableScreenState extends State<TimetableScreen>
     final data = _events.map((e) => jsonEncode(e.toJson())).toList();
     await prefs.setStringList('local_timetable', data);
 
-    LocalNotificationService.scheduleClassReminders(_events);
+    final reminderMinutes = prefs.getInt('reminder_minutes') ?? 10;
+
+    LocalNotificationService.scheduleClassReminders(
+      _events,
+      reminderMinutes: reminderMinutes,
+    );
   }
 
   void _addOrEditEvent({TimetableEvent? existingEvent}) {
@@ -263,6 +269,7 @@ class _TimetableScreenState extends State<TimetableScreen>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
+      appBar: AppBar(title: const Text('My Timetable')),
       floatingActionButton: FloatingActionButton(
         onPressed: _addOrEditEvent,
         backgroundColor: theme.colorScheme.primary,
@@ -271,6 +278,8 @@ class _TimetableScreenState extends State<TimetableScreen>
       ),
       body: Column(
         children: [
+          ReminderSettingsWidget(myEvents: _events),
+          const Divider(height: 1),
           Container(
             color: theme.cardColor,
             child: TabBar(
