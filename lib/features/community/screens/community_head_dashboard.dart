@@ -11,6 +11,7 @@ import 'package:campus_square/features/profile/screens/staff_profile_screen.dart
 import 'package:campus_square/features/square/screens/square_screen.dart';
 import 'package:campus_square/features/community/screens/member_management_screen.dart';
 import 'package:campus_square/features/chat/screens/messaging_hub_screen.dart';
+import 'package:campus_square/features/bazaar/screens/bazaar_screen.dart';
 
 class CommunityHeadDashboardScreen extends StatefulWidget {
   const CommunityHeadDashboardScreen({super.key});
@@ -28,7 +29,7 @@ class _CommunityHeadDashboardScreenState
 
   final List<Widget> _screens = [
     const SquareScreen(),
-    const Center(child: Text('Bazaar: Marketplace (Moderation Mode)')),
+    const BazaarScreen(),
     const AcademicVaultScreen(),
     const _CommunityPanelTab(),
     const StaffProfileScreen(),
