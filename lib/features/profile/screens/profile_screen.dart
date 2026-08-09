@@ -6,6 +6,7 @@ import 'package:campus_square/features/vault/screens/saved_vault_screen.dart';
 import 'package:campus_square/features/profile/screens/full_profile_screen.dart';
 import 'package:campus_square/features/settings/screens/notification_settings_screen.dart';
 import 'package:campus_square/features/timetable/screens/timetable_screen.dart';
+import 'package:campus_square/features/bazaar/screens/my_bazaar_listings_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -381,7 +382,14 @@ class ProfileScreen extends StatelessWidget {
                   leading: const Icon(Icons.storefront_outlined),
                   title: const Text('My Bazaar Listings'),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const MyBazaarListingsScreen(),
+                      ),
+                    );
+                  },
                 ),
                 const Divider(height: 1, indent: 56),
                 ListTile(

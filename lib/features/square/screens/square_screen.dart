@@ -1236,7 +1236,7 @@ class _SquareScreenState extends State<SquareScreen> {
 
     return Scaffold(
       floatingActionButton: FloatingActionButton(
-        heroTag: 'square_fab', // Unique tag to prevent crash in IndexedStack
+        heroTag: 'square_fab',
         onPressed: _showCreatePostSheet,
         backgroundColor: theme.colorScheme.primary,
         foregroundColor: Colors.white,

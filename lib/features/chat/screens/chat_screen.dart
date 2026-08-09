@@ -2431,7 +2431,7 @@ class _ExpandableMessageTextState extends State<ExpandableMessageText> {
     String displayText = widget.text;
 
     if (match != null) {
-      final ext = match.group(1)!; //final ext = match.group(1)!.toLowerCase();
+      final ext = match.group(1)!;
       final name = match.group(2)!;
       final url = match.group(3)!;
       displayText = match.group(4)!;
