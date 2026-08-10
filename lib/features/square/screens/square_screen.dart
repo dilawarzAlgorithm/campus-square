@@ -21,9 +21,29 @@ class _SquareScreenState extends State<SquareScreen> {
   late final ApiClient _apiClient;
   bool _isLoading = true;
   List<dynamic> _posts = [];
-  String? _selectedCategory;
+
+  late final PageController _pageController;
+  late final ScrollController _tabScrollController;
+  int _currentPageIndex = 0;
+
+  final List<String?> _categoryKeys = [
+    null,
+    "RANDOM",
+    "NOTICE",
+    "EVENT",
+    "LOST_FOUND",
+    "COMPLAINT",
+    "RIDE_POOL",
+    "ROOMMATE",
+  ];
+
+  String _discussionSortType = 'newest';
+
+  final _quickPostController = TextEditingController();
+  bool _isQuickPosting = false;
 
   final Map<String, String> _categories = {
+    "Random": "RANDOM",
     "Notices": "NOTICE",
     "Events": "EVENT",
     "Lost & Found": "LOST_FOUND",
@@ -33,6 +53,7 @@ class _SquareScreenState extends State<SquareScreen> {
   };
 
   final Map<String, ({IconData icon, Color color})> _categoryInfo = {
+    "RANDOM": (icon: Icons.tag_rounded, color: Colors.blueAccent),
     "NOTICE": (icon: Icons.campaign_rounded, color: Colors.orange),
     "EVENT": (icon: Icons.celebration_rounded, color: Colors.purple),
     "LOST_FOUND": (icon: Icons.search_rounded, color: Colors.green),
@@ -47,14 +68,39 @@ class _SquareScreenState extends State<SquareScreen> {
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(initialPage: 0);
+    _tabScrollController = ScrollController();
     final auth = context.read<CampusSquareAuth>();
     _apiClient = ApiClient(baseUrl: auth.baseUrl);
     _loadCacheThenFetch();
   }
 
+  @override
+  void dispose() {
+    _quickPostController.dispose();
+    _pageController.dispose();
+    _tabScrollController.dispose();
+    super.dispose();
+  }
+
+  String _buildEndpoint(String? category) {
+    String endpoint = "/api/square/notices";
+    List<String> queryParams = [];
+    if (category != null) {
+      queryParams.add('category=$category');
+    }
+    if (category == 'RANDOM') {
+      queryParams.add('sort_by=$_discussionSortType');
+    }
+    if (queryParams.isNotEmpty) {
+      endpoint += '?${queryParams.join('&')}';
+    }
+    return endpoint;
+  }
+
   Future<void> _loadCacheThenFetch() async {
-    String endpoint =
-        "/api/square/notices${_selectedCategory != null ? '?category=$_selectedCategory' : ''}";
+    String? currentCategory = _categoryKeys[_currentPageIndex];
+    String endpoint = _buildEndpoint(currentCategory);
 
     final cachedString = await _apiClient.getCachedData(endpoint);
     if (cachedString != null && mounted) {
@@ -63,7 +109,6 @@ class _SquareScreenState extends State<SquareScreen> {
         _isLoading = false;
       });
     }
-
     _fetchPosts(endpoint);
   }
 
@@ -90,6 +135,106 @@ class _SquareScreenState extends State<SquareScreen> {
     }
   }
 
+  void _scrollToTab(int index) {
+    if (!_tabScrollController.hasClients) return;
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    final estimatedTabPosition = (index * 100.0) - (screenWidth / 2) + 50.0;
+
+    final targetOffset = estimatedTabPosition.clamp(
+      0.0,
+      _tabScrollController.position.maxScrollExtent,
+    );
+
+    _tabScrollController.animateTo(
+      targetOffset,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void _onPageChanged(int index) {
+    setState(() {
+      _currentPageIndex = index;
+      _isLoading = true;
+    });
+    _scrollToTab(index);
+    _loadCacheThenFetch();
+  }
+
+  void _onTabSelected(int index) {
+    _pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  Future<void> _submitQuickPost() async {
+    if (_quickPostController.text.trim().length < 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Post must be at least 10 characters long.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isQuickPosting = true);
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    try {
+      final response = await _apiClient.authenticatedRequest(
+        context,
+        "/api/square/notices",
+        method: "POST",
+        body: jsonEncode({
+          "title": "Discussion",
+          "body": _quickPostController.text.trim(),
+          "category": "RANDOM",
+          "urgent_until": null,
+          "image_url": null,
+          "file_url": null,
+        }),
+      );
+
+      if (response.statusCode == 201 && mounted) {
+        _quickPostController.clear();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Posted successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        int randomIdx = _categoryKeys.indexOf("RANDOM");
+        if (randomIdx != -1) {
+          setState(() {
+            _discussionSortType = "newest";
+          });
+          _pageController.animateToPage(
+            randomIdx,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          );
+        } else {
+          _loadCacheThenFetch();
+        }
+      } else {
+        throw Exception("Failed to post.");
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isQuickPosting = false);
+    }
+  }
+
   Future<void> _votePost(String postId, String voteType) async {
     HapticFeedback.lightImpact();
     try {
@@ -107,6 +252,21 @@ class _SquareScreenState extends State<SquareScreen> {
             final index = _posts.indexWhere((p) => p['id'] == postId);
             if (index != -1) {
               _posts[index] = updatedPost;
+
+              String? currentCategory = _categoryKeys[_currentPageIndex];
+              if (currentCategory == 'COMPLAINT' ||
+                  (currentCategory == 'RANDOM' &&
+                      _discussionSortType == 'upvotes')) {
+                _posts.sort((a, b) {
+                  int aNet = (a['upvote_count'] ?? 0);
+                  int bNet = (b['upvote_count'] ?? 0);
+                  if (aNet != bNet) return bNet.compareTo(aNet);
+
+                  DateTime aTime = DateTime.parse(a['created_at']);
+                  DateTime bTime = DateTime.parse(b['created_at']);
+                  return bTime.compareTo(aTime);
+                });
+              }
             }
           });
           context.read<CampusSquareAuth>().refreshProfile();
@@ -291,8 +451,8 @@ class _SquareScreenState extends State<SquareScreen> {
     bool isInputEmpty = true;
     String? replyingToId;
     String? replyingToName;
-
     final ScrollController listScrollController = ScrollController();
+
     final currentUser = context.read<CampusSquareAuth>().user;
     final currentUserId = currentUser?['id'];
     final userRole = currentUser?['role'] ?? 'STUDENT';
@@ -689,7 +849,9 @@ class _SquareScreenState extends State<SquareScreen> {
                                                 if (response.statusCode ==
                                                     201) {
                                                   await _fetchPosts(
-                                                    "/api/square/notices${_selectedCategory != null ? '?category=$_selectedCategory' : ''}",
+                                                    _buildEndpoint(
+                                                      post['category'],
+                                                    ),
                                                   );
 
                                                   final updatedPost = _posts
@@ -875,10 +1037,9 @@ class _SquareScreenState extends State<SquareScreen> {
                   "/api/square/comments/${c['id']}",
                   method: "DELETE",
                 );
-
                 if (response.statusCode == 200) {
                   await _fetchPosts(
-                    "/api/square/notices${_selectedCategory != null ? '?category=$_selectedCategory' : ''}",
+                    _buildEndpoint(_categoryKeys[_currentPageIndex]),
                   );
                   final updatedPost = _posts.firstWhere(
                     (p) => p['id'] == postId,
@@ -914,10 +1075,22 @@ class _SquareScreenState extends State<SquareScreen> {
     final isStaff = userRole == 'ADMIN' || userRole == 'COMMUNITY_HEAD';
 
     final availableCategories = isStaff
-        ? _categories.values.toList()
-        : ["LOST_FOUND", "COMPLAINT", "RIDE_POOL", "ROOMMATE"];
+        ? [
+            "NOTICE",
+            "EVENT",
+            "LOST_FOUND",
+            "COMPLAINT",
+            "RIDE_POOL",
+            "ROOMMATE",
+            "RANDOM",
+          ]
+        : ["LOST_FOUND", "COMPLAINT", "RIDE_POOL", "ROOMMATE", "RANDOM"];
 
-    String selectedType = availableCategories.first;
+    String? currentCat = _categoryKeys[_currentPageIndex];
+    String selectedType = availableCategories.contains(currentCat)
+        ? currentCat!
+        : availableCategories.first;
+
     bool isUrgent = false;
     int urgentHours = 48;
 
@@ -937,7 +1110,9 @@ class _SquareScreenState extends State<SquareScreen> {
           builder: (context, setModalState) {
             final int titleLen = titleController.text.trim().length;
             final int bodyLen = bodyController.text.trim().length;
-            final bool isValid = titleLen >= 3 && bodyLen >= 10;
+
+            final bool isValid =
+                (titleLen >= 3 || selectedType == "RANDOM") && bodyLen >= 10;
 
             return Padding(
               padding: EdgeInsets.only(
@@ -967,7 +1142,11 @@ class _SquareScreenState extends State<SquareScreen> {
                       ),
                       items: availableCategories.map((type) {
                         final uiLabel = _categories.entries
-                            .firstWhere((e) => e.value == type)
+                            .firstWhere(
+                              (e) => e.value == type,
+                              orElse: () =>
+                                  const MapEntry('Discussion', 'RANDOM'),
+                            )
                             .key;
                         return DropdownMenuItem(
                           value: type,
@@ -978,27 +1157,32 @@ class _SquareScreenState extends State<SquareScreen> {
                           setModalState(() => selectedType = val!),
                     ),
                     const SizedBox(height: 16),
-                    TextField(
-                      controller: titleController,
-                      onChanged: (_) => setModalState(() {}),
-                      maxLength: 100,
-                      decoration: InputDecoration(
-                        labelText: 'Title',
-                        border: OutlineInputBorder(),
-                        counterText: '$titleLen / 100 (Min 3)',
-                        counterStyle: TextStyle(
-                          color: titleLen < 3 ? Colors.red : Colors.green,
-                          fontWeight: FontWeight.bold,
+                    if (selectedType != "RANDOM")
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16.0),
+                        child: TextField(
+                          controller: titleController,
+                          onChanged: (_) => setModalState(() {}),
+                          maxLength: 100,
+                          decoration: InputDecoration(
+                            labelText: 'Title',
+                            border: OutlineInputBorder(),
+                            counterText: '$titleLen / 100 (Min 3)',
+                            counterStyle: TextStyle(
+                              color: titleLen < 3 ? Colors.red : Colors.green,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
                     TextField(
                       controller: bodyController,
                       maxLines: 4,
                       onChanged: (_) => setModalState(() {}),
                       decoration: InputDecoration(
-                        labelText: 'Details',
+                        labelText: selectedType == "RANDOM"
+                            ? "What's on your mind?"
+                            : 'Details',
                         border: OutlineInputBorder(),
                         counterText: '$bodyLen characters (Min 10)',
                         counterStyle: TextStyle(
@@ -1069,11 +1253,12 @@ class _SquareScreenState extends State<SquareScreen> {
                       onPressed: (!isValid || isSubmitting)
                           ? null
                           : () async {
-                              if (titleController.text.trim().isEmpty ||
-                                  bodyController.text.trim().isEmpty) {
+                              if (bodyController.text.trim().isEmpty) {
                                 return;
                               }
+
                               setModalState(() => isSubmitting = true);
+
                               try {
                                 String? urgentUntilStr;
                                 if (isUrgent) {
@@ -1123,13 +1308,20 @@ class _SquareScreenState extends State<SquareScreen> {
                                 }
 
                                 if (!context.mounted) return;
+
+                                String finalTitle = titleController.text.trim();
+                                if (selectedType == "RANDOM" &&
+                                    finalTitle.isEmpty) {
+                                  finalTitle = "Discussion";
+                                }
+
                                 final response = await _apiClient
                                     .authenticatedRequest(
                                       context,
                                       "/api/square/notices",
                                       method: "POST",
                                       body: jsonEncode({
-                                        "title": titleController.text.trim(),
+                                        "title": finalTitle,
                                         "body": bodyController.text.trim(),
                                         "category": selectedType,
                                         "urgent_until": urgentUntilStr,
@@ -1142,7 +1334,21 @@ class _SquareScreenState extends State<SquareScreen> {
 
                                 if (response.statusCode == 201) {
                                   Navigator.pop(ctx);
-                                  _loadCacheThenFetch();
+
+                                  int newIdx = _categoryKeys.indexOf(
+                                    selectedType,
+                                  );
+                                  if (newIdx != -1) {
+                                    _pageController.animateToPage(
+                                      newIdx,
+                                      duration: const Duration(
+                                        milliseconds: 300,
+                                      ),
+                                      curve: Curves.easeInOut,
+                                    );
+                                  } else {
+                                    _loadCacheThenFetch();
+                                  }
                                 } else if (response.statusCode == 422) {
                                   final errorData = jsonDecode(response.body);
                                   if (errorData['detail'] is List) {
@@ -1226,13 +1432,619 @@ class _SquareScreenState extends State<SquareScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildPostList() {
     final theme = Theme.of(context);
     final currentUser = context.read<CampusSquareAuth>().user;
     final currentUserId = currentUser?['id'];
     final userRole = currentUser?['role'] ?? 'STUDENT';
     final isStaff = userRole == 'ADMIN' || userRole == 'COMMUNITY_HEAD';
+
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_posts.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.feed_outlined, size: 64, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            const Text(
+              'No posts found in this category.',
+              style: TextStyle(color: Colors.grey),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () =>
+          _fetchPosts(_buildEndpoint(_categoryKeys[_currentPageIndex])),
+      child: ListView.builder(
+        padding: const EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: 100,
+        ),
+        itemCount: _posts.length,
+        itemBuilder: (context, index) {
+          final post = _posts[index];
+          final author = post['author'];
+
+          bool isUrgent = false;
+          if (post['urgent_until'] != null) {
+            final expireDate = DateTime.parse(post['urgent_until']).toLocal();
+            isUrgent = DateTime.now().isBefore(expireDate);
+          }
+
+          final isOwner = author['id'] == currentUserId;
+          final canDelete = isOwner || isStaff;
+
+          final isPeerPost = [
+            "LOST_FOUND",
+            "RIDE_POOL",
+            "ROOMMATE",
+            "COMPLAINT",
+            "RANDOM",
+          ].contains(post['category']);
+
+          final bool hideTitle =
+              post['category'] == 'RANDOM' && post['title'] == 'Discussion';
+
+          return Card(
+            margin: const EdgeInsets.only(bottom: 16),
+            elevation: isUrgent ? 4 : 1,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: isUrgent
+                  ? const BorderSide(color: Colors.red, width: 2)
+                  : BorderSide.none,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: theme.colorScheme.primary.withValues(
+                          alpha: 0.1,
+                        ),
+                        child: Text(
+                          author['first_name'][0].toUpperCase(),
+                          style: TextStyle(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    '${author['first_name']} ${author['last_name']}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (author['role'] == 'ADMIN' ||
+                                    author['role'] == 'COMMUNITY_HEAD') ...[
+                                  const SizedBox(width: 4),
+                                  const Icon(
+                                    Icons.verified,
+                                    color: Colors.blue,
+                                    size: 16,
+                                  ),
+                                ],
+                              ],
+                            ),
+                            Row(
+                              children: [
+                                Text(
+                                  author['role'] == 'COMMUNITY_HEAD'
+                                      ? 'Staff'
+                                      : author['role'],
+                                  style: TextStyle(
+                                    color: author['role'] == 'STUDENT'
+                                        ? Colors.grey
+                                        : Colors.green.shade700,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const Text(
+                                  ' • ',
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                Text(
+                                  _formatTime(post['created_at']),
+                                  style: const TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (canDelete)
+                        IconButton(
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            size: 20,
+                            color: Colors.grey,
+                          ),
+                          onPressed: () => _deletePost(post['id']),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (isUrgent)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            size: 16,
+                            color: Colors.red.shade700,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'URGENT NOTICE',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  if (!hideTitle)
+                    Text(
+                      post['title'],
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+
+                  if (!hideTitle) const SizedBox(height: 8),
+                  Text(
+                    post['body'],
+                    style: TextStyle(
+                      fontSize: 15,
+                      height: 1.4,
+                      color: theme.textTheme.bodyMedium?.color,
+                    ),
+                  ),
+                  if (post['image_url'] != null) ...[
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: CachedNetworkImage(
+                        imageUrl: post['image_url'],
+                        cacheKey: post['image_url'].split('?').first,
+                        fit: BoxFit.cover,
+                        fadeInDuration: const Duration(milliseconds: 200),
+                        placeholder: (context, url) => Container(
+                          height: 200,
+                          width: double.infinity,
+                          color: Colors.grey.withValues(alpha: 0.1),
+                          child: const Center(
+                            child: CircularProgressIndicator(),
+                          ),
+                        ),
+                        errorWidget: (context, url, error) => Container(
+                          height: 200,
+                          width: double.infinity,
+                          color: Colors.grey.withValues(alpha: 0.1),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.cloud_off,
+                                color: Colors.grey,
+                                size: 32,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Image unavailable offline',
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (post['file_url'] != null) ...[
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.picture_as_pdf, color: Colors.red),
+                      label: const Text('Open Attachment'),
+                      onPressed: () => _openResource(post['file_url']),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            if (post['category'] == 'COMPLAINT' ||
+                                post['category'] == 'RANDOM') ...[
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: theme
+                                      .colorScheme
+                                      .surfaceContainerHighest
+                                      .withValues(alpha: 0.4),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    InkWell(
+                                      borderRadius:
+                                          const BorderRadius.horizontal(
+                                            left: Radius.circular(20),
+                                          ),
+                                      onTap: () =>
+                                          _votePost(post["id"], "UPVOTE"),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              post["my_vote"] == "UPVOTE"
+                                                  ? Icons.thumb_up_rounded
+                                                  : Icons.thumb_up_outlined,
+                                              size: 16,
+                                              color: post["my_vote"] == "UPVOTE"
+                                                  ? theme.colorScheme.primary
+                                                  : Colors.grey.shade700,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              '${post["upvote_count"] ?? 0}',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13,
+                                                color:
+                                                    post["my_vote"] == "UPVOTE"
+                                                    ? theme.colorScheme.primary
+                                                    : theme
+                                                          .textTheme
+                                                          .bodyMedium
+                                                          ?.color,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      width: 1,
+                                      height: 20,
+                                      color: Colors.grey.withValues(alpha: 0.3),
+                                    ),
+                                    InkWell(
+                                      borderRadius:
+                                          const BorderRadius.horizontal(
+                                            right: Radius.circular(20),
+                                          ),
+                                      onTap: () =>
+                                          _votePost(post["id"], "DOWNVOTE"),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              '${post["downvote_count"] ?? 0}',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13,
+                                                color:
+                                                    post["my_vote"] ==
+                                                        "DOWNVOTE"
+                                                    ? Colors.red
+                                                    : theme
+                                                          .textTheme
+                                                          .bodyMedium
+                                                          ?.color,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Icon(
+                                              post["my_vote"] == "DOWNVOTE"
+                                                  ? Icons.thumb_down_rounded
+                                                  : Icons.thumb_down_outlined,
+                                              size: 16,
+                                              color:
+                                                  post["my_vote"] == "DOWNVOTE"
+                                                  ? Colors.red
+                                                  : Colors.grey.shade700,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            if (isPeerPost) ...[
+                              if (post['category'] == 'ROOMMATE')
+                                TextButton.icon(
+                                  icon: const Icon(
+                                    Icons.info_outline,
+                                    size: 18,
+                                  ),
+                                  label: const Text('Details'),
+                                  style: TextButton.styleFrom(
+                                    minimumSize: const Size(0, 36),
+                                  ),
+                                  onPressed: () =>
+                                      _showRoommateDetails(context, author),
+                                ),
+                              if (isOwner ||
+                                  (isStaff && post['category'] == 'COMPLAINT'))
+                                ElevatedButton.icon(
+                                  icon: const Icon(
+                                    Icons.check_circle_outline,
+                                    size: 18,
+                                  ),
+                                  label: const Text('Mark as Resolved'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.green.withValues(
+                                      alpha: 0.1,
+                                    ),
+                                    foregroundColor: Colors.green,
+                                    elevation: 0,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                    ),
+                                    minimumSize: const Size(0, 36),
+                                  ),
+                                  onPressed: () => _confirmResolvePost(post),
+                                )
+                              else if (!isOwner)
+                                ElevatedButton.icon(
+                                  icon: const Icon(
+                                    Icons.chat_bubble_outline,
+                                    size: 16,
+                                  ),
+                                  label: Text(
+                                    'DM ${author['first_name']}',
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: theme.colorScheme.primary
+                                        .withValues(alpha: 0.1),
+                                    foregroundColor: theme.colorScheme.primary,
+                                    elevation: 0,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                    ),
+                                    minimumSize: const Size(0, 36),
+                                  ),
+                                  onPressed: () async {
+                                    String? initialText;
+                                    if (post['category'] == 'ROOMMATE') {
+                                      final myProfile = currentUser?['profile'];
+                                      final diet =
+                                          myProfile?['dietary_preference'];
+                                      final sleep =
+                                          myProfile?['sleep_schedule'];
+                                      final study = myProfile?['study_habits'];
+                                      List<String> habits = [];
+                                      if (diet != null &&
+                                          diet.toString().trim().isNotEmpty) {
+                                        habits.add('- Diet: $diet');
+                                      }
+                                      if (sleep != null &&
+                                          sleep.toString().trim().isNotEmpty) {
+                                        habits.add('- Sleep: $sleep');
+                                      }
+                                      if (study != null &&
+                                          study.toString().trim().isNotEmpty) {
+                                        habits.add('- Study: $study');
+                                      }
+
+                                      if (habits.isNotEmpty) {
+                                        initialText =
+                                            'Hi! I saw your roommate post. Here are my habits:\n${habits.join('\n')}\nLet me know if we are a match!';
+                                      } else {
+                                        initialText =
+                                            'Hi! I saw your roommate post. Let me know if we are a match!';
+                                      }
+                                    }
+
+                                    try {
+                                      final response = await _apiClient
+                                          .authenticatedRequest(
+                                            context,
+                                            "/api/chat/dm/${author['id']}",
+                                            method: "POST",
+                                          );
+
+                                      if (!context.mounted) {
+                                        return;
+                                      }
+
+                                      if (response.statusCode == 200) {
+                                        final conv = jsonDecode(response.body);
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => ChatScreen(
+                                              conversationId: conv['id'],
+                                              chatTitle:
+                                                  '${author['first_name']} ${author['last_name']}',
+                                              initialText: initialText,
+                                            ),
+                                          ),
+                                        );
+                                      } else {
+                                        final error = jsonDecode(response.body);
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).clearSnackBars();
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              error['detail'] ??
+                                                  "Could not start chat",
+                                            ),
+                                            backgroundColor: Colors.red,
+                                          ),
+                                        );
+                                      }
+                                    } catch (e) {
+                                      debugPrint("Chat error: $e");
+                                    }
+                                  },
+                                ),
+                            ],
+                            if (!isPeerPost ||
+                                post['category'] == 'COMPLAINT' ||
+                                post['category'] == 'RANDOM')
+                              TextButton.icon(
+                                icon: const Icon(
+                                  Icons.comment_outlined,
+                                  size: 18,
+                                ),
+                                label: Text(
+                                  'Comments (${post['comments']?.length ?? 0})',
+                                ),
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                  ),
+                                  minimumSize: const Size(0, 36),
+                                ),
+                                onPressed: () => _showCommentsSheet(post),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        margin: const EdgeInsets.only(left: 8),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainerHighest
+                              .withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Builder(
+                          builder: (context) {
+                            final category = _categories.entries.firstWhere(
+                              (e) => e.value == post['category'],
+                              orElse: () => const MapEntry('Unknown', ''),
+                            );
+                            final info = _categoryInfo[category.value];
+                            final bool isRandom = post['category'] == 'RANDOM';
+
+                            return Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (info != null)
+                                  Container(
+                                    padding: EdgeInsets.all(isRandom ? 6 : 3),
+                                    decoration: BoxDecoration(
+                                      color: info.color.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(
+                                        isRandom ? 12 : 6,
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      info.icon,
+                                      size: isRandom ? 16 : 14,
+                                      color: info.color,
+                                    ),
+                                  ),
+                                if (!isRandom) ...[
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    category.key,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.blueGrey,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
 
     return Scaffold(
       floatingActionButton: FloatingActionButton(
@@ -1242,755 +2054,186 @@ class _SquareScreenState extends State<SquareScreen> {
         foregroundColor: Colors.white,
         child: const Icon(Icons.add),
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: Stack(
         children: [
-          Container(
-            height: 60,
-            decoration: BoxDecoration(
-              color: theme.cardColor,
-              border: Border(
-                bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
-              ),
-            ),
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(right: 8.0),
-                  child: ChoiceChip(
-                    label: const Text('All'),
-                    selected: _selectedCategory == null,
-                    onSelected: (selected) {
-                      if (selected) {
-                        setState(() => _selectedCategory = null);
-                        _loadCacheThenFetch();
-                      }
-                    },
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                height: 50,
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  border: Border(
+                    bottom: BorderSide(
+                      color: Colors.grey.withValues(alpha: 0.2),
+                    ),
                   ),
                 ),
-                ..._categories.entries.map((entry) {
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: ChoiceChip(
-                      label: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _categoryInfo[entry.value]!.icon,
-                            color: _categoryInfo[entry.value]!.color,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(entry.key),
-                        ],
-                      ),
-                      selected: _selectedCategory == entry.value,
-                      onSelected: (selected) {
-                        setState(
-                          () =>
-                              _selectedCategory = selected ? entry.value : null,
-                        );
-                        _loadCacheThenFetch();
-                      },
-                    ),
-                  );
-                }),
-              ],
-            ),
-          ),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _posts.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.feed_outlined,
-                          size: 64,
-                          color: Colors.grey.shade400,
-                        ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'No posts found in this category.',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  )
-                : RefreshIndicator(
-                    onRefresh: () => _fetchPosts(
-                      "/api/square/notices${_selectedCategory != null ? '?category=$_selectedCategory' : ''}",
-                    ),
-                    child: ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _posts.length,
-                      itemBuilder: (context, index) {
-                        final post = _posts[index];
-                        final author = post['author'];
-
-                        bool isUrgent = false;
-                        if (post['urgent_until'] != null) {
-                          final expireDate = DateTime.parse(
-                            post['urgent_until'],
-                          ).toLocal();
-                          isUrgent = DateTime.now().isBefore(expireDate);
-                        }
-
-                        final isOwner = author['id'] == currentUserId;
-                        final canDelete = isOwner || isStaff;
-
-                        final isPeerPost = [
-                          "LOST_FOUND",
-                          "RIDE_POOL",
-                          "ROOMMATE",
-                          "COMPLAINT",
-                        ].contains(post['category']);
-
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 16),
-                          elevation: isUrgent ? 4 : 1,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            side: isUrgent
-                                ? const BorderSide(color: Colors.red, width: 2)
-                                : BorderSide.none,
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    CircleAvatar(
-                                      backgroundColor: theme.colorScheme.primary
-                                          .withValues(alpha: 0.1),
-                                      child: Text(
-                                        author['first_name'][0].toUpperCase(),
-                                        style: TextStyle(
-                                          color: theme.colorScheme.primary,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Flexible(
-                                                child: Text(
-                                                  '${author['first_name']} ${author['last_name']}',
-                                                  style: const TextStyle(
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 16,
-                                                  ),
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                              if (author['role'] == 'ADMIN' ||
-                                                  author['role'] ==
-                                                      'COMMUNITY_HEAD') ...[
-                                                const SizedBox(width: 4),
-                                                const Icon(
-                                                  Icons.verified,
-                                                  color: Colors.blue,
-                                                  size: 16,
-                                                ),
-                                              ],
-                                            ],
-                                          ),
-                                          Row(
-                                            children: [
-                                              Text(
-                                                author['role'] ==
-                                                        'COMMUNITY_HEAD'
-                                                    ? 'Staff'
-                                                    : author['role'],
-                                                style: TextStyle(
-                                                  color:
-                                                      author['role'] ==
-                                                          'STUDENT'
-                                                      ? Colors.grey
-                                                      : Colors.green.shade700,
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                              const Text(
-                                                ' • ',
-                                                style: TextStyle(
-                                                  color: Colors.grey,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                              Text(
-                                                _formatTime(post['created_at']),
-                                                style: const TextStyle(
-                                                  color: Colors.grey,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    if (canDelete)
-                                      IconButton(
-                                        icon: const Icon(
-                                          Icons.delete_outline,
-                                          size: 20,
-                                          color: Colors.grey,
-                                        ),
-                                        onPressed: () =>
-                                            _deletePost(post['id']),
-                                        padding: EdgeInsets.zero,
-                                        constraints: const BoxConstraints(),
-                                      ),
-                                  ],
-                                ),
-                                const SizedBox(height: 16),
-                                if (isUrgent)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.red.shade50,
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.warning_amber_rounded,
-                                          size: 16,
-                                          color: Colors.red.shade700,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          'URGENT NOTICE',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.red.shade700,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                Text(
-                                  post['title'],
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  post['body'],
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    height: 1.4,
-                                    color: theme.textTheme.bodyMedium?.color,
-                                  ),
-                                ),
-                                if (post['image_url'] != null) ...[
-                                  const SizedBox(height: 12),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: CachedNetworkImage(
-                                      imageUrl: post['image_url'],
-                                      cacheKey: post['image_url']
-                                          .split('?')
-                                          .first,
-                                      fit: BoxFit.cover,
-                                      fadeInDuration: const Duration(
-                                        milliseconds: 200,
-                                      ),
-                                      placeholder: (context, url) => Container(
-                                        height: 200,
-                                        width: double.infinity,
-                                        color: Colors.grey.withValues(
-                                          alpha: 0.1,
-                                        ),
-                                        child: const Center(
-                                          child: CircularProgressIndicator(),
-                                        ),
-                                      ),
-                                      errorWidget: (context, url, error) =>
-                                          Container(
-                                            height: 200,
-                                            width: double.infinity,
-                                            color: Colors.grey.withValues(
-                                              alpha: 0.1,
-                                            ),
-                                            child: Column(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.center,
-                                              children: [
-                                                const Icon(
-                                                  Icons.cloud_off,
-                                                  color: Colors.grey,
-                                                  size: 32,
-                                                ),
-                                                const SizedBox(height: 8),
-                                                Text(
-                                                  'Image unavailable offline',
-                                                  style: TextStyle(
-                                                    color: Colors.grey.shade600,
-                                                    fontSize: 12,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                    ),
-                                  ),
-                                ],
-
-                                if (post['file_url'] != null) ...[
-                                  const SizedBox(height: 12),
-                                  OutlinedButton.icon(
-                                    icon: const Icon(
-                                      Icons.picture_as_pdf,
-                                      color: Colors.red,
-                                    ),
-                                    label: const Text('Open Attachment'),
-                                    onPressed: () =>
-                                        _openResource(post['file_url']),
-                                  ),
-                                ],
-                                const SizedBox(height: 16),
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Expanded(
-                                      child: Wrap(
-                                        spacing: 8,
-                                        runSpacing: 8,
-                                        crossAxisAlignment:
-                                            WrapCrossAlignment.center,
-                                        children: [
-                                          if (post['category'] ==
-                                              'COMPLAINT') ...[
-                                            Container(
-                                              decoration: BoxDecoration(
-                                                color: theme
-                                                    .colorScheme
-                                                    .surfaceContainerHighest
-                                                    .withValues(alpha: 0.4),
-                                                borderRadius:
-                                                    BorderRadius.circular(20),
-                                              ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  InkWell(
-                                                    borderRadius:
-                                                        const BorderRadius.horizontal(
-                                                          left: Radius.circular(
-                                                            20,
-                                                          ),
-                                                        ),
-                                                    onTap: () => _votePost(
-                                                      post["id"],
-                                                      "UPVOTE",
-                                                    ),
-                                                    child: Padding(
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
-                                                            horizontal: 12,
-                                                            vertical: 8,
-                                                          ),
-                                                      child: Row(
-                                                        mainAxisSize:
-                                                            MainAxisSize.min,
-                                                        children: [
-                                                          Icon(
-                                                            post["my_vote"] ==
-                                                                    "UPVOTE"
-                                                                ? Icons
-                                                                      .thumb_up_rounded
-                                                                : Icons
-                                                                      .thumb_up_outlined,
-                                                            size: 16,
-                                                            color:
-                                                                post["my_vote"] ==
-                                                                    "UPVOTE"
-                                                                ? theme
-                                                                      .colorScheme
-                                                                      .primary
-                                                                : Colors
-                                                                      .grey
-                                                                      .shade700,
-                                                          ),
-                                                          const SizedBox(
-                                                            width: 6,
-                                                          ),
-                                                          Text(
-                                                            '${(post["upvote_count"] ?? 0) - (post["downvote_count"] ?? 0)}',
-                                                            style: TextStyle(
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .bold,
-                                                              fontSize: 13,
-                                                              color:
-                                                                  post["my_vote"] ==
-                                                                      "UPVOTE"
-                                                                  ? theme
-                                                                        .colorScheme
-                                                                        .primary
-                                                                  : theme
-                                                                        .textTheme
-                                                                        .bodyMedium
-                                                                        ?.color,
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  Container(
-                                                    width: 1,
-                                                    height: 20,
-                                                    color: Colors.grey
-                                                        .withValues(alpha: 0.3),
-                                                  ),
-                                                  InkWell(
-                                                    borderRadius:
-                                                        const BorderRadius.horizontal(
-                                                          right:
-                                                              Radius.circular(
-                                                                20,
-                                                              ),
-                                                        ),
-                                                    onTap: () => _votePost(
-                                                      post["id"],
-                                                      "DOWNVOTE",
-                                                    ),
-                                                    child: Padding(
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
-                                                            horizontal: 12,
-                                                            vertical: 8,
-                                                          ),
-                                                      child: Icon(
-                                                        post["my_vote"] ==
-                                                                "DOWNVOTE"
-                                                            ? Icons
-                                                                  .thumb_down_rounded
-                                                            : Icons
-                                                                  .thumb_down_outlined,
-                                                        size: 16,
-                                                        color:
-                                                            post["my_vote"] ==
-                                                                "DOWNVOTE"
-                                                            ? Colors.red
-                                                            : Colors
-                                                                  .grey
-                                                                  .shade700,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                          if (isPeerPost) ...[
-                                            if (post['category'] == 'ROOMMATE')
-                                              TextButton.icon(
-                                                icon: const Icon(
-                                                  Icons.info_outline,
-                                                  size: 18,
-                                                ),
-                                                label: const Text('Details'),
-                                                style: TextButton.styleFrom(
-                                                  minimumSize: const Size(
-                                                    0,
-                                                    36,
-                                                  ),
-                                                ),
-                                                onPressed: () =>
-                                                    _showRoommateDetails(
-                                                      context,
-                                                      author,
-                                                    ),
-                                              ),
-                                            if (isOwner ||
-                                                (isStaff &&
-                                                    post['category'] ==
-                                                        'COMPLAINT'))
-                                              ElevatedButton.icon(
-                                                icon: const Icon(
-                                                  Icons.check_circle_outline,
-                                                  size: 18,
-                                                ),
-                                                label: const Text(
-                                                  'Mark as Resolved',
-                                                ),
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.green
-                                                      .withValues(alpha: 0.1),
-                                                  foregroundColor: Colors.green,
-                                                  elevation: 0,
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 12,
-                                                      ),
-                                                  minimumSize: const Size(
-                                                    0,
-                                                    36,
-                                                  ),
-                                                ),
-                                                onPressed: () =>
-                                                    _confirmResolvePost(post),
-                                              )
-                                            else
-                                              ElevatedButton.icon(
-                                                icon: const Icon(
-                                                  Icons.chat_bubble_outline,
-                                                  size: 18,
-                                                ),
-                                                label: Text(
-                                                  'Message ${author['first_name']}',
-                                                ),
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: theme
-                                                      .colorScheme
-                                                      .primary
-                                                      .withValues(alpha: 0.1),
-                                                  foregroundColor:
-                                                      theme.colorScheme.primary,
-                                                  elevation: 0,
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 12,
-                                                      ),
-                                                  minimumSize: const Size(
-                                                    0,
-                                                    36,
-                                                  ),
-                                                ),
-                                                onPressed: () async {
-                                                  String? initialText;
-                                                  if (post['category'] ==
-                                                      'ROOMMATE') {
-                                                    final myProfile =
-                                                        currentUser?['profile'];
-                                                    final diet =
-                                                        myProfile?['dietary_preference'];
-                                                    final sleep =
-                                                        myProfile?['sleep_schedule'];
-                                                    final study =
-                                                        myProfile?['study_habits'];
-                                                    List<String> habits = [];
-                                                    if (diet != null &&
-                                                        diet
-                                                            .toString()
-                                                            .trim()
-                                                            .isNotEmpty) {
-                                                      habits.add(
-                                                        '- Diet: $diet',
-                                                      );
-                                                    }
-                                                    if (sleep != null &&
-                                                        sleep
-                                                            .toString()
-                                                            .trim()
-                                                            .isNotEmpty) {
-                                                      habits.add(
-                                                        '- Sleep: $sleep',
-                                                      );
-                                                    }
-                                                    if (study != null &&
-                                                        study
-                                                            .toString()
-                                                            .trim()
-                                                            .isNotEmpty) {
-                                                      habits.add(
-                                                        '- Study: $study',
-                                                      );
-                                                    }
-
-                                                    if (habits.isNotEmpty) {
-                                                      initialText =
-                                                          'Hi! I saw your roommate post. Here are my habits:\n${habits.join('\n')}\nLet me know if we are a match!';
-                                                    } else {
-                                                      initialText =
-                                                          'Hi! I saw your roommate post. Let me know if we are a match!';
-                                                    }
-                                                  }
-                                                  try {
-                                                    final response = await _apiClient
-                                                        .authenticatedRequest(
-                                                          context,
-                                                          "/api/chat/dm/${author['id']}",
-                                                          method: "POST",
-                                                        );
-
-                                                    if (!context.mounted) {
-                                                      return;
-                                                    }
-                                                    if (response.statusCode ==
-                                                        200) {
-                                                      final conv = jsonDecode(
-                                                        response.body,
-                                                      );
-                                                      Navigator.push(
-                                                        context,
-                                                        MaterialPageRoute(
-                                                          builder: (_) =>
-                                                              ChatScreen(
-                                                                conversationId:
-                                                                    conv['id'],
-                                                                chatTitle:
-                                                                    '${author['first_name']} ${author['last_name']}',
-                                                                initialText:
-                                                                    initialText,
-                                                              ),
-                                                        ),
-                                                      );
-                                                    } else {
-                                                      final error = jsonDecode(
-                                                        response.body,
-                                                      );
-                                                      ScaffoldMessenger.of(
-                                                        context,
-                                                      ).clearSnackBars();
-                                                      ScaffoldMessenger.of(
-                                                        context,
-                                                      ).showSnackBar(
-                                                        SnackBar(
-                                                          content: Text(
-                                                            error['detail'] ??
-                                                                "Could not start chat",
-                                                          ),
-                                                          backgroundColor:
-                                                              Colors.red,
-                                                        ),
-                                                      );
-                                                    }
-                                                  } catch (e) {
-                                                    debugPrint(
-                                                      "Chat error: $e",
-                                                    );
-                                                  }
-                                                },
-                                              ),
-                                          ],
-                                          if (!isPeerPost ||
-                                              post['category'] == 'COMPLAINT')
-                                            TextButton.icon(
-                                              icon: const Icon(
-                                                Icons.comment_outlined,
-                                                size: 18,
-                                              ),
-                                              label: Text(
-                                                'Comments (${post['comments']?.length ?? 0})',
-                                              ),
-                                              style: TextButton.styleFrom(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 8,
-                                                    ),
-                                                minimumSize: const Size(0, 36),
-                                              ),
-                                              onPressed: () =>
-                                                  _showCommentsSheet(post),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 4,
-                                      ),
-                                      margin: const EdgeInsets.only(left: 8),
-                                      decoration: BoxDecoration(
-                                        color: theme
-                                            .colorScheme
-                                            .surfaceContainerHighest
-                                            .withValues(alpha: 0.5),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Builder(
-                                        builder: (context) {
-                                          final category = _categories.entries
-                                              .firstWhere(
-                                                (e) =>
-                                                    e.value == post['category'],
-                                                orElse: () => const MapEntry(
-                                                  'Unknown',
-                                                  '',
-                                                ),
-                                              );
-                                          final info =
-                                              _categoryInfo[category.value];
-
-                                          return Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              if (info != null) ...[
-                                                Container(
-                                                  padding: const EdgeInsets.all(
-                                                    3,
-                                                  ),
-                                                  decoration: BoxDecoration(
-                                                    color: info.color
-                                                        .withValues(
-                                                          alpha: 0.12,
-                                                        ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          6,
-                                                        ),
-                                                  ),
-                                                  child: Icon(
-                                                    info.icon,
-                                                    size: 14,
-                                                    color: info.color,
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 6),
-                                              ],
-                                              Text(
-                                                category.key,
-                                                style: const TextStyle(
-                                                  fontSize: 12,
-                                                  color: Colors.blueGrey,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
-                                            ],
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+                child: ListView(
+                  controller: _tabScrollController,
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
                   ),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: ChoiceChip(
+                        label: const Text('All'),
+                        selected: _currentPageIndex == 0,
+                        showCheckmark: false,
+                        onSelected: (selected) {
+                          if (selected) _onTabSelected(0);
+                        },
+                      ),
+                    ),
+                    ..._categories.entries.toList().asMap().entries.map((
+                      mappedEntry,
+                    ) {
+                      int idx = mappedEntry.key + 1;
+                      var entry = mappedEntry.value;
+
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8.0),
+                        child: ChoiceChip(
+                          showCheckmark: false,
+                          label: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _categoryInfo[entry.value]!.icon,
+                                color: _categoryInfo[entry.value]!.color,
+                                size: 16,
+                              ),
+                              if (entry.value != "RANDOM") ...[
+                                const SizedBox(width: 6),
+                                Text(entry.key),
+                              ],
+                            ],
+                          ),
+                          selected: _currentPageIndex == idx,
+                          onSelected: (selected) {
+                            if (selected) _onTabSelected(idx);
+                          },
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+              if (_categoryKeys[_currentPageIndex] == 'RANDOM')
+                Padding(
+                  padding: const EdgeInsets.only(right: 16.0, top: 4.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      const Icon(Icons.sort, size: 14, color: Colors.grey),
+                      const SizedBox(width: 4),
+                      DropdownButton<String>(
+                        value: _discussionSortType,
+                        isDense: true,
+                        underline: const SizedBox(),
+                        icon: Icon(
+                          Icons.keyboard_arrow_down,
+                          size: 18,
+                          color: theme.colorScheme.primary,
+                        ),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'newest',
+                            child: Text('Created At'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'upvotes',
+                            child: Text('Most Voted'),
+                          ),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() {
+                              _discussionSortType = val;
+                              _isLoading = true;
+                            });
+                            _loadCacheThenFetch();
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              Expanded(
+                child: PageView.builder(
+                  controller: _pageController,
+                  onPageChanged: _onPageChanged,
+                  itemCount: _categoryKeys.length,
+                  itemBuilder: (context, index) {
+                    return _buildPostList();
+                  },
+                ),
+              ),
+            ],
+          ),
+
+          Positioned(
+            bottom: 16,
+            left: 16,
+            right: 80,
+            child: Material(
+              elevation: 4,
+              borderRadius: BorderRadius.circular(24),
+              color: Colors.transparent,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: theme.cardColor.withValues(alpha: 0.95),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _quickPostController,
+                        textCapitalization: TextCapitalization.sentences,
+                        maxLines: 3,
+                        minLines: 1,
+                        decoration: const InputDecoration(
+                          hintText: "What's on your mind?",
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (_isQuickPosting)
+                      const Padding(
+                        padding: EdgeInsets.all(12.0),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    else
+                      IconButton(
+                        icon: Icon(
+                          Icons.send_rounded,
+                          color: theme.colorScheme.primary,
+                        ),
+                        onPressed: _submitQuickPost,
+                      ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       ),

@@ -12,6 +12,7 @@ import 'package:campus_square/features/square/screens/square_screen.dart';
 import 'package:campus_square/features/community/screens/member_management_screen.dart';
 import 'package:campus_square/features/chat/screens/messaging_hub_screen.dart';
 import 'package:campus_square/features/bazaar/screens/bazaar_screen.dart';
+import 'package:campus_square/features/community/screens/manage_campaign_screen.dart';
 
 class CommunityHeadDashboardScreen extends StatefulWidget {
   const CommunityHeadDashboardScreen({super.key});
@@ -213,6 +214,12 @@ class _CommunityPanelTab extends StatelessWidget {
           Icons.star,
           'Promote reliable students to assist with moderation.',
         ),
+        _buildHeadCard(
+          context,
+          'Campus Theme & Events',
+          Icons.color_lens,
+          'Push banners, pop-ups, and customize your app theme.',
+        ),
       ],
     );
   }
@@ -242,6 +249,13 @@ class _CommunityPanelTab extends StatelessWidget {
               context,
               MaterialPageRoute(
                 builder: (context) => const MemberManagementScreen(),
+              ),
+            );
+          } else if (title == 'Campus Theme & Events') {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ManageCampaignScreen(),
               ),
             );
           }

@@ -133,6 +133,10 @@ class NotificationProvider extends ChangeNotifier {
     });
   }
 
+  void addSystemNotification(String title, String body) {
+    _addNotification(title, body);
+  }
+
   void _addNotification(String title, String body) {
     if (_notifications.isNotEmpty &&
         _notifications.first.title == title &&

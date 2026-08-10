@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'package:campus_square/core/network/api_client.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
+import 'package:campus_square/features/community/screens/manage_campaign_screen.dart';
 
 class ManageInstitutionsScreen extends StatefulWidget {
   const ManageInstitutionsScreen({super.key});
@@ -347,11 +348,26 @@ class _ManageInstitutionsScreenState extends State<ManageInstitutionsScreen> {
                     trailing: PopupMenuButton<String>(
                       onSelected: (val) {
                         if (val == 'storage') _showEditStorageLimitDialog(inst);
+                        if (val == 'campaign') {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ManageCampaignScreen(
+                                institutionId: inst['id'],
+                                institutionName: inst['name'],
+                              ),
+                            ),
+                          );
+                        }
                       },
                       itemBuilder: (context) => [
                         const PopupMenuItem(
                           value: 'storage',
                           child: Text('Edit Default Storage Limit'),
+                        ),
+                        const PopupMenuItem(
+                          value: 'campaign',
+                          child: Text('Edit Campus Theme & Campaign'),
                         ),
                       ],
                     ),

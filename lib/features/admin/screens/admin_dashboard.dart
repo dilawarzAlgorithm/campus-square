@@ -6,6 +6,7 @@ import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 import 'package:campus_square/features/profile/screens/staff_profile_screen.dart';
 import 'package:campus_square/features/admin/screens/manage_institutions_screen.dart';
 import 'package:campus_square/features/admin/screens/manage_users_global_screen.dart';
+import 'package:campus_square/features/community/screens/manage_campaign_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -181,6 +182,18 @@ class _AdminPanelTabState extends State<_AdminPanelTab> {
             ],
           ),
         const SizedBox(height: 24),
+        _buildAdminCard(
+          context,
+          'Global Theme & Campaign',
+          Icons.color_lens,
+          'Force a new theme, banner, or pop-up across ALL institutions.',
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const ManageCampaignScreen(isGlobal: true),
+            ),
+          ),
+        ),
         _buildAdminCard(
           context,
           'Global Broadcast',
