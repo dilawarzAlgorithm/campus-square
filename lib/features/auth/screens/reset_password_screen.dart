@@ -1,39 +1,54 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
-import 'package:campus_square/features/auth/screens/forgot_password_screen.dart';
 
-class StaffLoginScreen extends StatefulWidget {
-  const StaffLoginScreen({super.key});
+class ResetPasswordScreen extends StatefulWidget {
+  final String email;
+
+  const ResetPasswordScreen({super.key, required this.email});
 
   @override
-  State<StaffLoginScreen> createState() => _StaffLoginScreenState();
+  State<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
 }
 
-class _StaffLoginScreenState extends State<StaffLoginScreen> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
+class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
+  final _otpController = TextEditingController();
+  final _newPasswordController = TextEditingController();
   bool _isLoading = false;
 
-  void _handleLogin() async {
-    if (_emailController.text.trim().isEmpty ||
-        _passwordController.text.isEmpty) {
-      _showSnackBar("Please fill in all details.", isError: true);
+  void _handleResetPassword() async {
+    if (_otpController.text.trim().length < 6) {
+      _showSnackBar("Please enter the 6-digit OTP.", isError: true);
+      return;
+    }
+
+    if (_newPasswordController.text.length < 8) {
+      _showSnackBar(
+        "New password must be at least 8 characters.",
+        isError: true,
+      );
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      final result = await context.read<CampusSquareAuth>().staffLogin(
-        email: _emailController.text.trim().toLowerCase(),
-        password: _passwordController.text,
-      );
+      final success = await context
+          .read<CampusSquareAuth>()
+          .resetPasswordWithOtp(
+            widget.email,
+            _otpController.text.trim(),
+            _newPasswordController.text,
+          );
 
-      if (!result.success && mounted) {
-        _showSnackBar("Invalid credentials. Try again.", isError: true);
-      } else if (mounted) {
-        Navigator.pop(context);
+      if (!mounted) return;
+
+      if (success) {
+        _showSnackBar(
+          "Password successfully reset! Please login.",
+          isError: false,
+        );
+        Navigator.popUntil(context, (route) => route.isFirst);
       }
     } catch (e) {
       _showSnackBar(e.toString().replaceAll("Exception: ", ""), isError: true);
@@ -43,7 +58,6 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
   }
 
   void _showSnackBar(String message, {required bool isError}) {
-    if (!mounted) return;
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -63,7 +77,7 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close),
+          icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -75,69 +89,58 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Icon(
-                Icons.admin_panel_settings_rounded,
+                Icons.password_rounded,
                 size: 80,
-                color: theme.colorScheme.secondary,
+                color: theme.colorScheme.primary,
               ),
               const SizedBox(height: 16),
               Text(
-                'Staff & Admin Portal',
+                'Create New Password',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.secondary,
+                  color: theme.colorScheme.primary,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
-                'Secure access for community heads and administrators.',
+                'Enter the OTP sent to ${widget.email} and your new password.',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
               ),
               const SizedBox(height: 48),
-
               TextField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
+                controller: _otpController,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 24,
+                  letterSpacing: 12,
+                  fontWeight: FontWeight.bold,
+                ),
                 decoration: const InputDecoration(
-                  labelText: 'Authorized Email / ID',
+                  hintText: '000000',
                   border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.badge_outlined),
+                  counterText: "",
                 ),
               ),
               const SizedBox(height: 16),
               TextField(
-                controller: _passwordController,
+                controller: _newPasswordController,
                 obscureText: true,
                 decoration: const InputDecoration(
-                  labelText: 'Password',
+                  labelText: 'New Password (min. 8 chars)',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.lock_outline),
                 ),
               ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const ForgotPasswordScreen(),
-                      ),
-                    );
-                  },
-                  child: Text(
-                    'Forgot Password?',
-                    style: TextStyle(color: theme.colorScheme.secondary),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: _isLoading ? null : _handleLogin,
+                onPressed: _isLoading ? null : _handleResetPassword,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: theme.colorScheme.secondary,
+                  backgroundColor: theme.colorScheme.primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -153,7 +156,7 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
                         ),
                       )
                     : const Text(
-                        'Access Portal',
+                        'Reset Password',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,

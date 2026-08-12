@@ -1,39 +1,49 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
-import 'package:campus_square/features/auth/screens/forgot_password_screen.dart';
+import 'package:campus_square/features/auth/screens/reset_password_screen.dart';
 
-class StaffLoginScreen extends StatefulWidget {
-  const StaffLoginScreen({super.key});
+class ForgotPasswordScreen extends StatefulWidget {
+  const ForgotPasswordScreen({super.key});
 
   @override
-  State<StaffLoginScreen> createState() => _StaffLoginScreenState();
+  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
-class _StaffLoginScreenState extends State<StaffLoginScreen> {
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
   bool _isLoading = false;
 
-  void _handleLogin() async {
-    if (_emailController.text.trim().isEmpty ||
-        _passwordController.text.isEmpty) {
-      _showSnackBar("Please fill in all details.", isError: true);
+  void _handleRequestReset() async {
+    if (_emailController.text.trim().isEmpty) {
+      _showSnackBar("Please enter your email address.", isError: true);
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      final result = await context.read<CampusSquareAuth>().staffLogin(
-        email: _emailController.text.trim().toLowerCase(),
-        password: _passwordController.text,
-      );
+      final success = await context
+          .read<CampusSquareAuth>()
+          .requestPasswordReset(_emailController.text.trim().toLowerCase());
 
-      if (!result.success && mounted) {
-        _showSnackBar("Invalid credentials. Try again.", isError: true);
-      } else if (mounted) {
-        Navigator.pop(context);
+      if (!mounted) return;
+
+      if (success) {
+        _showSnackBar("OTP sent! Check your inbox.", isError: false);
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ResetPasswordScreen(
+              email: _emailController.text.trim().toLowerCase(),
+            ),
+          ),
+        );
+      } else {
+        _showSnackBar(
+          "Failed to request password reset. Try again.",
+          isError: true,
+        );
       }
     } catch (e) {
       _showSnackBar(e.toString().replaceAll("Exception: ", ""), isError: true);
@@ -43,7 +53,6 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
   }
 
   void _showSnackBar(String message, {required bool isError}) {
-    if (!mounted) return;
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -63,7 +72,7 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close),
+          icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -75,69 +84,41 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Icon(
-                Icons.admin_panel_settings_rounded,
+                Icons.lock_reset_rounded,
                 size: 80,
-                color: theme.colorScheme.secondary,
+                color: theme.colorScheme.primary,
               ),
               const SizedBox(height: 16),
               Text(
-                'Staff & Admin Portal',
+                'Forgot Password',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.secondary,
+                  color: theme.colorScheme.primary,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
-                'Secure access for community heads and administrators.',
+                'Enter your registered email to receive an OTP.',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
               ),
               const SizedBox(height: 48),
-
               TextField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
                 decoration: const InputDecoration(
-                  labelText: 'Authorized Email / ID',
+                  labelText: 'Email Address',
                   border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.badge_outlined),
+                  prefixIcon: Icon(Icons.email_outlined),
                 ),
               ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lock_outline),
-                ),
-              ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const ForgotPasswordScreen(),
-                      ),
-                    );
-                  },
-                  child: Text(
-                    'Forgot Password?',
-                    style: TextStyle(color: theme.colorScheme.secondary),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: _isLoading ? null : _handleLogin,
+                onPressed: _isLoading ? null : _handleRequestReset,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: theme.colorScheme.secondary,
+                  backgroundColor: theme.colorScheme.primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -153,7 +134,7 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
                         ),
                       )
                     : const Text(
-                        'Access Portal',
+                        'Send OTP',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,

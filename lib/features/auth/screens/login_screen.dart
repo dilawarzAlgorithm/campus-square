@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 import 'package:campus_square/features/auth/screens/register_screen.dart';
 import 'package:campus_square/features/auth/screens/staff_login_screen.dart';
-import 'package:provider/provider.dart';
+import 'package:campus_square/features/auth/screens/forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -121,8 +123,21 @@ class _LoginScreenState extends State<LoginScreen> {
                   prefixIcon: Icon(Icons.lock_outline),
                 ),
               ),
-
-              const SizedBox(height: 24),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ForgotPasswordScreen(),
+                      ),
+                    );
+                  },
+                  child: const Text('Forgot Password?'),
+                ),
+              ),
+              const SizedBox(height: 8),
               ElevatedButton(
                 onPressed: _isLoading ? null : _handleLogin,
                 style: ElevatedButton.styleFrom(

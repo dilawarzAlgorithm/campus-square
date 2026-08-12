@@ -63,6 +63,111 @@ class FullProfileScreen extends StatelessWidget {
     );
   }
 
+  void _showChangePasswordDialog(BuildContext context, CampusSquareAuth auth) {
+    final oldController = TextEditingController();
+    final newController = TextEditingController();
+    bool isLoading = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Text('Change Password'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: oldController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Current Password',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: newController,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: 'New Password'),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: isLoading
+                    ? null
+                    : () async {
+                        if (oldController.text.isEmpty ||
+                            newController.text.length < 8) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                "New password must be at least 8 chars",
+                              ),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                          return;
+                        }
+
+                        setDialogState(() => isLoading = true);
+                        try {
+                          final success = await auth.changePassword(
+                            oldController.text,
+                            newController.text,
+                          );
+
+                          if (context.mounted) {
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  success
+                                      ? "Password updated successfully!"
+                                      : "Failed to update password",
+                                ),
+                                backgroundColor: success
+                                    ? Colors.green
+                                    : Colors.red,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  e.toString().replaceAll("Exception: ", ""),
+                                ),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        } finally {
+                          if (context.mounted) {
+                            setDialogState(() => isLoading = false);
+                          }
+                        }
+                      },
+                child: isLoading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Update'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   void _showEditNameDialog(BuildContext context, CampusSquareAuth auth) {
     final firstController = TextEditingController(
       text: auth.user?["first_name"],
@@ -253,6 +358,26 @@ class FullProfileScreen extends StatelessWidget {
             'Platform Role',
             user['role'] ?? 'STUDENT',
             Icons.admin_panel_settings_outlined,
+          ),
+          const SizedBox(height: 16),
+          ListTile(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
+            ),
+            tileColor: Theme.of(
+              context,
+            ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+            leading: const Icon(
+              Icons.password_outlined,
+              color: Colors.blueGrey,
+            ),
+            title: const Text(
+              'Change Password',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _showChangePasswordDialog(context, auth),
           ),
           _buildSectionHeader(context, "Academics"),
           _buildInfoTile(

@@ -211,6 +211,130 @@ class CampusSquareAuth extends ChangeNotifier {
     }
   }
 
+  Future<bool> requestPasswordReset(String email) async {
+    try {
+      final url = Uri.parse("$baseUrl/api/auth/forgot-password");
+      final response = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"email": email}),
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint("Forgot password error: $e");
+      return false;
+    }
+  }
+
+  Future<bool> resetPasswordWithOtp(
+    String email,
+    String otp,
+    String newPassword,
+  ) async {
+    try {
+      final url = Uri.parse("$baseUrl/api/auth/reset-password");
+      final response = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "email": email,
+          "otp": otp,
+          "new_password": newPassword,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return true;
+      } else {
+        final data = jsonDecode(response.body);
+        throw Exception(data["detail"] ?? "Failed to reset password.");
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<bool> changePassword(String oldPassword, String newPassword) async {
+    try {
+      final accessToken = await _storage.getAccessToken();
+      if (accessToken == null) return false;
+
+      final url = Uri.parse("$baseUrl/api/auth/change-password");
+      final response = await http.post(
+        url,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $accessToken",
+        },
+        body: jsonEncode({
+          "old_password": oldPassword,
+          "new_password": newPassword,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        await updateUserProfileLocally(data['user']);
+        return true;
+      } else {
+        final data = jsonDecode(response.body);
+        throw Exception(data['detail'] ?? "Failed to change password.");
+      }
+    } catch (e) {
+      debugPrint("Change password error: $e");
+      rethrow;
+    }
+  }
+
+  Future<bool> requestRecoveryEmailOtp(String email) async {
+    try {
+      final accessToken = await _storage.getAccessToken();
+      if (accessToken == null) return false;
+
+      final url = Uri.parse("$baseUrl/api/auth/recovery-email/request-otp");
+      final response = await http.post(
+        url,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $accessToken",
+        },
+        body: jsonEncode({"recovery_email": email}),
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint("Request recovery OTP error: $e");
+      return false;
+    }
+  }
+
+  Future<bool> verifyAndSetRecoveryEmail(String email, String otp) async {
+    try {
+      final accessToken = await _storage.getAccessToken();
+      if (accessToken == null) return false;
+
+      final url = Uri.parse("$baseUrl/api/auth/recovery-email/verify");
+      final response = await http.post(
+        url,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $accessToken",
+        },
+        body: jsonEncode({"recovery_email": email, "otp": otp}),
+      );
+
+      if (response.statusCode == 200) {
+        await refreshProfile();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint("Verify recovery email error: $e");
+      return false;
+    }
+  }
+
   Future<bool> login(String email, String password) async {
     try {
       final url = Uri.parse("$baseUrl/api/auth/login");
