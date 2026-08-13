@@ -4,7 +4,8 @@ import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 import 'package:campus_square/features/auth/screens/forgot_password_screen.dart';
 
 class StaffLoginScreen extends StatefulWidget {
-  const StaffLoginScreen({super.key});
+  final bool isStandaloneApp;
+  const StaffLoginScreen({super.key, this.isStandaloneApp = false});
 
   @override
   State<StaffLoginScreen> createState() => _StaffLoginScreenState();
@@ -32,7 +33,7 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
 
       if (!result.success && mounted) {
         _showSnackBar("Invalid credentials. Try again.", isError: true);
-      } else if (mounted) {
+      } else if (mounted && !widget.isStandaloneApp) {
         Navigator.pop(context);
       }
     } catch (e) {
@@ -62,10 +63,12 @@ class _StaffLoginScreenState extends State<StaffLoginScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => Navigator.pop(context),
-        ),
+        leading: widget.isStandaloneApp
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.pop(context),
+              ),
       ),
       body: Center(
         child: SingleChildScrollView(

@@ -8,8 +8,10 @@ import 'package:campus_square/core/theme/theme_provider.dart';
 import 'package:campus_square/core/services/notification_service.dart';
 import 'package:campus_square/core/services/local_notification_service.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
-import 'package:campus_square/shared/widgets/auth_route_guard.dart';
 import 'package:campus_square/features/timetable/screens/alarm_screen.dart';
+import 'package:campus_square/features/auth/screens/login_screen.dart';
+import 'package:campus_square/features/auth/screens/splash_screen.dart';
+import 'package:campus_square/features/dashboard/screens/dashboard_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -49,14 +51,13 @@ Future<void> main() async {
         ),
         ChangeNotifierProvider(create: (_) => ThemeProvider()..initialize()),
       ],
-      child: CampusSquareApp(isAlarmLaunch: isAlarmLaunch),
+      child: CampusSquareStudentApp(isAlarmLaunch: isAlarmLaunch),
     ),
   );
 }
 
-class CampusSquareApp extends StatelessWidget {
-  const CampusSquareApp({super.key, required this.isAlarmLaunch});
-
+class CampusSquareStudentApp extends StatelessWidget {
+  const CampusSquareStudentApp({super.key, required this.isAlarmLaunch});
   final bool isAlarmLaunch;
 
   @override
@@ -70,7 +71,52 @@ class CampusSquareApp extends StatelessWidget {
       darkTheme: themeProvider.darkTheme,
       themeMode: themeProvider.themeMode,
       debugShowCheckedModeBanner: false,
-      home: isAlarmLaunch ? const AlarmScreen() : const AuthRouteGuard(),
+      home: isAlarmLaunch ? const AlarmScreen() : const StudentRouteGuard(),
     );
+  }
+}
+
+class StudentRouteGuard extends StatelessWidget {
+  const StudentRouteGuard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final authProvider = context.watch<CampusSquareAuth>();
+    final authState = authProvider.status;
+    final user = authProvider.user;
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      child: _getScreenForState(context, authState, user),
+    );
+  }
+
+  Widget _getScreenForState(
+    BuildContext context,
+    ApplicationState state,
+    Map<String, dynamic>? user,
+  ) {
+    switch (state) {
+      case ApplicationState.initializing:
+        return const SplashScreen();
+      case ApplicationState.unauthenticated:
+        return const LoginScreen();
+      case ApplicationState.authenticated:
+        final role = user?['role'] ?? 'STUDENT';
+        if (role == 'ADMIN' || role == 'COMMUNITY_HEAD') {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Staff must use the Staff App.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            context.read<CampusSquareAuth>().logoutForcefully();
+          });
+          return const LoginScreen();
+        }
+
+        return const Dashboard();
+    }
   }
 }

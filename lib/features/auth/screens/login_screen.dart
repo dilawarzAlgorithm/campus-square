@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 import 'package:campus_square/features/auth/screens/register_screen.dart';
-import 'package:campus_square/features/auth/screens/staff_login_screen.dart';
 import 'package:campus_square/features/auth/screens/forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -192,20 +191,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ],
               ),
               const SizedBox(height: 24),
-              TextButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const StaffLoginScreen(),
-                    ),
-                  );
-                },
-                child: const Text(
-                  'Staff & Admin Login',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ),
             ],
           ),
         ),
