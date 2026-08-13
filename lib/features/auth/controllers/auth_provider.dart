@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -40,6 +42,73 @@ class CampusSquareAuth extends ChangeNotifier {
 
   CampusSquareAuth() {
     checkActiveSession();
+  }
+
+  Exception _formatException(dynamic e) {
+    final errorStr = e.toString();
+
+    // Mask raw socket/connection errors
+    if (e is SocketException ||
+        errorStr.contains('SocketException') ||
+        errorStr.contains('Connection refused')) {
+      return Exception(
+        "Unable to connect to the server. Please check your connection and try again.",
+      );
+    }
+    // Mask timeouts
+    if (e is TimeoutException || errorStr.contains('TimeoutException')) {
+      return Exception("The connection timed out. Please try again.");
+    }
+    // Mask general http client errors
+    if (e is http.ClientException || errorStr.contains('ClientException')) {
+      return Exception(
+        "A network error occurred. Please check your connection.",
+      );
+    }
+
+    // If it's an Exception we threw manually, preserve our friendly message
+    if (e is Exception) {
+      return e;
+    }
+
+    return Exception("An unexpected error occurred. Please try again.");
+  }
+
+  void _handleHttpError(http.Response response, {String? customMessage}) {
+    if (response.statusCode >= 200 && response.statusCode < 300) return;
+
+    String message =
+        customMessage ?? "Something went wrong. Please try again later.";
+
+    if (customMessage == null) {
+      if (response.statusCode == 400) {
+        message = "Invalid data provided. Please check your inputs.";
+      } else if (response.statusCode == 401) {
+        message = "Incorrect email or password.";
+      } else if (response.statusCode == 403) {
+        try {
+          final data = jsonDecode(response.body);
+          final detail = data["detail"]?.toString().toLowerCase() ?? "";
+          if (detail.contains("not verified")) {
+            // Keep this exact string, the UI routes to the OTP screen based on it
+            message = "Account email is not verified yet.";
+          } else if (detail.contains("blocked") ||
+              detail.contains("suspended")) {
+            message = "Your account has been blocked by an administrator.";
+          } else {
+            message = "Access denied. You do not have permission.";
+          }
+        } catch (_) {
+          message = "Access denied. You do not have permission.";
+        }
+      } else if (response.statusCode == 404) {
+        message = "The requested account or resource was not found.";
+      } else if (response.statusCode >= 500) {
+        message = "Server error. Our team has been notified.";
+      }
+    }
+
+    throw Exception(message);
   }
 
   Future<void> checkActiveSession() async {
@@ -113,14 +182,16 @@ class CampusSquareAuth extends ChangeNotifier {
         tokenToSend = await FirebaseMessaging.instance.getToken();
       }
 
-      await http.patch(
-        Uri.parse("$baseUrl/api/auth/fcm-token"),
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer $accessToken",
-        },
-        body: jsonEncode({"token": tokenToSend}),
-      );
+      await http
+          .patch(
+            Uri.parse("$baseUrl/api/auth/fcm-token"),
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $accessToken",
+            },
+            body: jsonEncode({"token": tokenToSend}),
+          )
+          .timeout(const Duration(seconds: 15));
     } catch (e) {
       debugPrint("Failed to update FCM token status: $e");
     }
@@ -144,45 +215,54 @@ class CampusSquareAuth extends ChangeNotifier {
         "department_id": departmentId,
       };
 
-      final response = await http.post(
-        url,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(bodyMap),
+      final response = await http
+          .post(
+            url,
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode(bodyMap),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      _handleHttpError(
+        response,
+        customMessage: response.statusCode == 400
+            ? "Registration failed. This email may be registered or inputs are invalid."
+            : null,
       );
 
       final data = jsonDecode(response.body);
-
-      if (response.statusCode == 201) {
-        return RegistrationResult(
-          success: true,
-          message: data["message"] ?? "Successfully registered!",
-          userId: data["user_id"],
-        );
-      } else {
-        throw Exception(data["detail"] ?? "Failed to register.");
-      }
+      return RegistrationResult(
+        success: true,
+        message: data["message"] ?? "Successfully registered!",
+        userId: data["user_id"],
+      );
     } catch (e) {
-      rethrow;
+      throw _formatException(e);
     }
   }
 
   Future<bool> verifyOtp({required String email, required String otp}) async {
     try {
       final url = Uri.parse("$baseUrl/api/auth/verify-otp");
-      final response = await http.post(
-        url,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"email": email, "otp": otp}),
+      final response = await http
+          .post(
+            url,
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({"email": email, "otp": otp}),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      _handleHttpError(
+        response,
+        customMessage: response.statusCode == 400
+            ? "Invalid or expired verification code."
+            : null,
       );
 
       final data = jsonDecode(response.body);
-      if (response.statusCode == 200) {
-        return data["success"] == true;
-      } else {
-        throw Exception(data["detail"] ?? "Invalid verification code.");
-      }
+      return data["success"] == true;
     } catch (e) {
-      rethrow;
+      throw _formatException(e);
     }
   }
 
@@ -192,33 +272,37 @@ class CampusSquareAuth extends ChangeNotifier {
   }) async {
     try {
       final url = Uri.parse("$baseUrl/api/auth/resend-otp");
-      final response = await http.post(
-        url,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"email": email, "password": password}),
+      final response = await http
+          .post(
+            url,
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({"email": email, "password": password}),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      _handleHttpError(
+        response,
+        customMessage: response.statusCode == 400
+            ? "Cannot resend code. This account may already be verified."
+            : null,
       );
 
-      final data = jsonDecode(response.body);
-      if (response.statusCode == 200) {
-        return true;
-      } else {
-        throw Exception(
-          data["detail"] ?? "Failed to resend verification code.",
-        );
-      }
+      return true;
     } catch (e) {
-      rethrow;
+      throw _formatException(e);
     }
   }
 
   Future<bool> requestPasswordReset(String email) async {
     try {
       final url = Uri.parse("$baseUrl/api/auth/forgot-password");
-      final response = await http.post(
-        url,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"email": email}),
-      );
+      final response = await http
+          .post(
+            url,
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({"email": email}),
+          )
+          .timeout(const Duration(seconds: 15));
 
       return response.statusCode == 200;
     } catch (e) {
@@ -234,24 +318,28 @@ class CampusSquareAuth extends ChangeNotifier {
   ) async {
     try {
       final url = Uri.parse("$baseUrl/api/auth/reset-password");
-      final response = await http.post(
-        url,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "email": email,
-          "otp": otp,
-          "new_password": newPassword,
-        }),
+      final response = await http
+          .post(
+            url,
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({
+              "email": email,
+              "otp": otp,
+              "new_password": newPassword,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      _handleHttpError(
+        response,
+        customMessage: response.statusCode == 400
+            ? "Invalid OTP code or password constraints not met."
+            : null,
       );
 
-      if (response.statusCode == 200) {
-        return true;
-      } else {
-        final data = jsonDecode(response.body);
-        throw Exception(data["detail"] ?? "Failed to reset password.");
-      }
+      return true;
     } catch (e) {
-      rethrow;
+      throw _formatException(e);
     }
   }
 
@@ -261,29 +349,33 @@ class CampusSquareAuth extends ChangeNotifier {
       if (accessToken == null) return false;
 
       final url = Uri.parse("$baseUrl/api/auth/change-password");
-      final response = await http.post(
-        url,
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer $accessToken",
-        },
-        body: jsonEncode({
-          "old_password": oldPassword,
-          "new_password": newPassword,
-        }),
+      final response = await http
+          .post(
+            url,
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $accessToken",
+            },
+            body: jsonEncode({
+              "old_password": oldPassword,
+              "new_password": newPassword,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      _handleHttpError(
+        response,
+        customMessage: response.statusCode == 400
+            ? "Incorrect old password."
+            : null,
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        await updateUserProfileLocally(data['user']);
-        return true;
-      } else {
-        final data = jsonDecode(response.body);
-        throw Exception(data['detail'] ?? "Failed to change password.");
-      }
+      final data = jsonDecode(response.body);
+      await updateUserProfileLocally(data['user']);
+      return true;
     } catch (e) {
       debugPrint("Change password error: $e");
-      rethrow;
+      throw _formatException(e);
     }
   }
 
@@ -293,14 +385,16 @@ class CampusSquareAuth extends ChangeNotifier {
       if (accessToken == null) return false;
 
       final url = Uri.parse("$baseUrl/api/auth/recovery-email/request-otp");
-      final response = await http.post(
-        url,
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer $accessToken",
-        },
-        body: jsonEncode({"recovery_email": email}),
-      );
+      final response = await http
+          .post(
+            url,
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $accessToken",
+            },
+            body: jsonEncode({"recovery_email": email}),
+          )
+          .timeout(const Duration(seconds: 15));
 
       return response.statusCode == 200;
     } catch (e) {
@@ -315,14 +409,16 @@ class CampusSquareAuth extends ChangeNotifier {
       if (accessToken == null) return false;
 
       final url = Uri.parse("$baseUrl/api/auth/recovery-email/verify");
-      final response = await http.post(
-        url,
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer $accessToken",
-        },
-        body: jsonEncode({"recovery_email": email, "otp": otp}),
-      );
+      final response = await http
+          .post(
+            url,
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $accessToken",
+            },
+            body: jsonEncode({"recovery_email": email, "otp": otp}),
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         await refreshProfile();
@@ -338,37 +434,36 @@ class CampusSquareAuth extends ChangeNotifier {
   Future<bool> login(String email, String password) async {
     try {
       final url = Uri.parse("$baseUrl/api/auth/login");
-      final response = await http.post(
-        url,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"email": email, "password": password}),
-      );
+      final response = await http
+          .post(
+            url,
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({"email": email, "password": password}),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      _handleHttpError(response); // Will throw masked exception if >= 300
 
       final data = jsonDecode(response.body);
+      await _storage.saveSession(
+        accessToken: data["access_token"],
+        refreshToken: data["refresh_token"],
+        userProfile: data["user"],
+      );
 
-      if (response.statusCode == 200) {
-        await _storage.saveSession(
-          accessToken: data["access_token"],
-          refreshToken: data["refresh_token"],
-          userProfile: data["user"],
-        );
+      _user = data["user"];
+      _status = ApplicationState.authenticated;
 
-        _user = data["user"];
-        _status = ApplicationState.authenticated;
+      final prefs = await SharedPreferences.getInstance();
+      final isMessageEnabled = prefs.getBool('fcm_message_hub') ?? true;
+      final allEnabled = prefs.getBool('fcm_all_notifications') ?? true;
+      updateFCMTokenStatus(allEnabled && isMessageEnabled);
+      syncTopics();
 
-        final prefs = await SharedPreferences.getInstance();
-        final isMessageEnabled = prefs.getBool('fcm_message_hub') ?? true;
-        final allEnabled = prefs.getBool('fcm_all_notifications') ?? true;
-        updateFCMTokenStatus(allEnabled && isMessageEnabled);
-        syncTopics();
-
-        notifyListeners();
-        return true;
-      } else {
-        throw Exception(data["detail"] ?? "Invalid email or password.");
-      }
+      notifyListeners();
+      return true;
     } catch (e) {
-      rethrow;
+      throw _formatException(e);
     }
   }
 
@@ -380,37 +475,36 @@ class CampusSquareAuth extends ChangeNotifier {
       final url = Uri.parse("$baseUrl/api/auth/login-staff");
       final bodyMap = {"email": email, "password": password};
 
-      final response = await http.post(
-        url,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(bodyMap),
-      );
+      final response = await http
+          .post(
+            url,
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode(bodyMap),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      _handleHttpError(response);
 
       final data = jsonDecode(response.body);
+      await _storage.saveSession(
+        accessToken: data["access_token"],
+        refreshToken: data["refresh_token"],
+        userProfile: data["user"],
+      );
 
-      if (response.statusCode == 200) {
-        await _storage.saveSession(
-          accessToken: data["access_token"],
-          refreshToken: data["refresh_token"],
-          userProfile: data["user"],
-        );
+      _user = data["user"];
+      _status = ApplicationState.authenticated;
 
-        _user = data["user"];
-        _status = ApplicationState.authenticated;
+      final prefs = await SharedPreferences.getInstance();
+      final isMessageEnabled = prefs.getBool('fcm_message_hub') ?? true;
+      final allEnabled = prefs.getBool('fcm_all_notifications') ?? true;
+      updateFCMTokenStatus(allEnabled && isMessageEnabled);
+      syncTopics();
 
-        final prefs = await SharedPreferences.getInstance();
-        final isMessageEnabled = prefs.getBool('fcm_message_hub') ?? true;
-        final allEnabled = prefs.getBool('fcm_all_notifications') ?? true;
-        updateFCMTokenStatus(allEnabled && isMessageEnabled);
-        syncTopics();
-
-        notifyListeners();
-        return AuthResult(success: true, message: "Logged in successfully.");
-      } else {
-        throw Exception(data["detail"] ?? "Invalid email or password.");
-      }
+      notifyListeners();
+      return AuthResult(success: true, message: "Logged in successfully.");
     } catch (e) {
-      rethrow;
+      throw _formatException(e);
     }
   }
 
@@ -436,13 +530,15 @@ class CampusSquareAuth extends ChangeNotifier {
       final accessToken = await _storage.getAccessToken();
       if (accessToken == null) return;
 
-      final response = await http.get(
-        Uri.parse("$baseUrl/api/auth/me"),
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer $accessToken",
-        },
-      );
+      final response = await http
+          .get(
+            Uri.parse("$baseUrl/api/auth/me"),
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $accessToken",
+            },
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -457,14 +553,16 @@ class CampusSquareAuth extends ChangeNotifier {
     try {
       final accessToken = await _storage.getAccessToken();
 
-      final response = await http.patch(
-        Uri.parse("$baseUrl/api/auth/name"),
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer $accessToken",
-        },
-        body: jsonEncode({"first_name": firstName, "last_name": lastName}),
-      );
+      final response = await http
+          .patch(
+            Uri.parse("$baseUrl/api/auth/name"),
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $accessToken",
+            },
+            body: jsonEncode({"first_name": firstName, "last_name": lastName}),
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -486,18 +584,20 @@ class CampusSquareAuth extends ChangeNotifier {
     try {
       final accessToken = await _storage.getAccessToken();
 
-      final response = await http.patch(
-        Uri.parse("$baseUrl/api/auth/profile"),
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer $accessToken",
-        },
-        body: jsonEncode({
-          "dietary_preference": dietary,
-          "sleep_schedule": sleep,
-          "study_habits": study,
-        }),
-      );
+      final response = await http
+          .patch(
+            Uri.parse("$baseUrl/api/auth/profile"),
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $accessToken",
+            },
+            body: jsonEncode({
+              "dietary_preference": dietary,
+              "sleep_schedule": sleep,
+              "study_habits": study,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

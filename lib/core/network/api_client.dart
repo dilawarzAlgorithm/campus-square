@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:campus_square/core/services/secure_storage_service.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 
@@ -20,6 +21,26 @@ class ApiClient {
   );
 
   ApiClient({required this.baseUrl});
+
+  void _handleGenericError(http.Response response) {
+    if (response.statusCode >= 200 && response.statusCode < 300) return;
+
+    String genericMessage = "Something went wrong. Please try again later.";
+
+    if (response.statusCode == 401) {
+      genericMessage = "Your session has expired. Please log in again.";
+    } else if (response.statusCode == 403) {
+      genericMessage = "You do not have permission to perform this action.";
+    } else if (response.statusCode == 404) {
+      genericMessage = "The requested resource could not be found.";
+    } else if (response.statusCode == 422) {
+      genericMessage = "Invalid data provided. Please check your inputs.";
+    } else if (response.statusCode >= 500) {
+      genericMessage = "Server error. Our team has been notified.";
+    }
+
+    throw Exception(genericMessage);
+  }
 
   Future<http.Response> authenticatedRequest(
     BuildContext context,
@@ -99,7 +120,7 @@ class ApiClient {
           }
         }
       } catch (_) {}
-      return response;
+      _handleGenericError(response);
     }
 
     if (response.statusCode == 401) {
@@ -108,7 +129,12 @@ class ApiClient {
         final newAccessToken = await _storage.getAccessToken();
         if (newAccessToken != null) {
           finalHeaders["Authorization"] = "Bearer $newAccessToken";
-          return await http.get(url, headers: finalHeaders);
+          response = await http.get(url, headers: finalHeaders);
+
+          if (response.statusCode >= 300) {
+            _handleGenericError(response);
+          }
+          return response;
         }
       } else {
         if (context.mounted) {
@@ -118,6 +144,10 @@ class ApiClient {
           ).logoutForcefully();
         }
       }
+    }
+
+    if (response.statusCode >= 300) {
+      _handleGenericError(response);
     }
 
     return response;
@@ -148,7 +178,7 @@ class ApiClient {
       }
     }
 
-    return http.Response('{"detail": "No internet connection"}', 503);
+    throw Exception("No internet connection available.");
   }
 
   Future<http.Response> authenticatedMultipartRequest(
@@ -172,12 +202,12 @@ class ApiClient {
         const Duration(seconds: 30),
       );
       var response = await http.Response.fromStream(streamedResponse);
+      if (response.statusCode >= 300) {
+        _handleGenericError(response);
+      }
       return response;
     } catch (_) {
-      return http.Response(
-        '{"detail": "Upload failed. Poor internet connection."}',
-        503,
-      );
+      throw Exception("Upload failed due to poor connection.");
     }
   }
 
