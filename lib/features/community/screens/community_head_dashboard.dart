@@ -9,6 +9,7 @@ import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 import 'package:campus_square/features/vault/screens/vault_screen.dart';
 import 'package:campus_square/features/profile/screens/staff_profile_screen.dart';
 import 'package:campus_square/features/square/screens/square_screen.dart';
+import 'package:campus_square/features/hubs/screens/hubs_screen.dart';
 import 'package:campus_square/features/community/screens/member_management_screen.dart';
 import 'package:campus_square/features/chat/screens/messaging_hub_screen.dart';
 import 'package:campus_square/features/bazaar/screens/bazaar_screen.dart';
@@ -31,6 +32,7 @@ class _CommunityHeadDashboardScreenState
   final List<Widget> _screens = [
     const SquareScreen(),
     const BazaarScreen(),
+    const HubsScreen(),
     const AcademicVaultScreen(),
     const _CommunityPanelTab(),
     const StaffProfileScreen(),
@@ -121,6 +123,8 @@ class _CommunityHeadDashboardScreenState
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         type: BottomNavigationBarType.fixed,
+        selectedFontSize: 10,
+        unselectedFontSize: 10,
         onTap: (index) {
           setState(() {
             _currentIndex = index;
@@ -136,6 +140,11 @@ class _CommunityHeadDashboardScreenState
             icon: Icon(Icons.shopping_bag_outlined),
             activeIcon: Icon(Icons.shopping_bag),
             label: 'Bazaar',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.hub_outlined),
+            activeIcon: Icon(Icons.hub),
+            label: 'Hubs',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.folder_outlined),
@@ -207,12 +216,6 @@ class _CommunityPanelTab extends StatelessWidget {
           'Member Directory',
           Icons.list_alt,
           'View and manage all students in your institution.',
-        ),
-        _buildHeadCard(
-          context,
-          'Assign Captains',
-          Icons.star,
-          'Promote reliable students to assist with moderation.',
         ),
         _buildHeadCard(
           context,

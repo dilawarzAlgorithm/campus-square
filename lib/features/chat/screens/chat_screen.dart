@@ -1321,6 +1321,37 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  Widget _buildSenderBadge(Map<String, dynamic> sender) {
+    if (sender['role'] == 'ADMIN' || sender['role'] == 'COMMUNITY_HEAD') {
+      return const Padding(
+        padding: EdgeInsets.only(left: 4.0),
+        child: Tooltip(
+          message: "Staff",
+          child: Text("✔️", style: TextStyle(fontSize: 12)),
+        ),
+      );
+    }
+    if (sender['is_hub_admin'] == true) {
+      return const Padding(
+        padding: EdgeInsets.only(left: 4.0),
+        child: Tooltip(
+          message: "Hub Admin",
+          child: Text("🛡️", style: TextStyle(fontSize: 12)),
+        ),
+      );
+    }
+    if (sender['is_hub_lead'] == true) {
+      return const Padding(
+        padding: EdgeInsets.only(left: 4.0),
+        child: Tooltip(
+          message: "Team Lead",
+          child: Text("⭐", style: TextStyle(fontSize: 12)),
+        ),
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
   @override
   void dispose() {
     _isDisposing = true;
@@ -1927,15 +1958,25 @@ class _ChatScreenState extends State<ChatScreen> {
                                                   !isDeleted &&
                                                   !isGroupedWithOlder &&
                                                   widget.isGroup) ...[
-                                                Text(
-                                                  msg['sender']['first_name'],
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: theme
-                                                        .colorScheme
-                                                        .primary,
-                                                  ),
+                                                Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Text(
+                                                      msg['sender']['first_name'],
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: theme
+                                                            .colorScheme
+                                                            .primary,
+                                                      ),
+                                                    ),
+                                                    _buildSenderBadge(
+                                                      msg['sender'],
+                                                    ),
+                                                  ],
                                                 ),
                                                 const SizedBox(height: 2),
                                               ],
@@ -1954,7 +1995,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                                           true &&
                                                       !isDeleted) ...[
                                                     Text(
-                                                      'Edited · ',
+                                                      'Edited • ',
                                                       style: TextStyle(
                                                         color: isMe
                                                             ? Colors.white70
@@ -2825,6 +2866,18 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
         if (currentConv != null) {
           setState(() {
             _participants = currentConv['participants'] ?? [];
+            _participants.sort((a, b) {
+              if (a['is_approved'] == false && b['is_approved'] != false) {
+                return -1;
+              }
+              if (a['is_approved'] != false && b['is_approved'] == false) {
+                return 1;
+              }
+              if (a['is_admin'] == true && b['is_admin'] != true) return -1;
+              if (a['is_admin'] != true && b['is_admin'] == true) return 1;
+              return 0;
+            });
+
             _isLoading = false;
           });
         }
@@ -2885,6 +2938,157 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
           backgroundColor: Colors.red,
         ),
       );
+    }
+  }
+
+  Future<void> _handleHubAction(String userId, String action) async {
+    try {
+      final auth = context.read<CampusSquareAuth>();
+      final apiClient = ApiClient(baseUrl: auth.baseUrl);
+
+      if (action == 'make_lead') {
+        _showSelectTeamForLeadDialog(userId);
+        return;
+      }
+
+      String endpoint = "";
+      String method = "PATCH";
+
+      if (action == 'approve') {
+        endpoint = "/api/hubs/${widget.conversationId}/members/$userId/approve";
+      } else if (action == 'reject') {
+        endpoint = "/api/hubs/${widget.conversationId}/members/$userId/reject";
+        method = "DELETE";
+      } else if (action == 'promote') {
+        endpoint = "/api/hubs/${widget.conversationId}/members/$userId/promote";
+      } else if (action == 'demote') {
+        endpoint = "/api/hubs/${widget.conversationId}/members/$userId/demote";
+      } else if (action == 'remove_lead') {
+        endpoint =
+            "/api/hubs/${widget.conversationId}/members/$userId/remove-lead";
+      }
+
+      final response = await apiClient.authenticatedRequest(
+        context,
+        endpoint,
+        method: method,
+      );
+
+      if (response.statusCode == 200 && mounted) {
+        _fetchDetails();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Success'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      debugPrint("Action Error: $e");
+    }
+  }
+
+  void _showSelectTeamForLeadDialog(String userId) async {
+    try {
+      final auth = context.read<CampusSquareAuth>();
+      final apiClient = ApiClient(baseUrl: auth.baseUrl);
+      final res = await apiClient.authenticatedRequest(
+        context,
+        "/api/hubs?type=TEAM&parent_id=${widget.conversationId}",
+        method: "GET",
+      );
+
+      if (res.statusCode != 200 || !mounted) return;
+
+      final teams = jsonDecode(res.body) as List<dynamic>;
+
+      if (teams.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "No teams exist in this Club yet. Please create a team first.",
+            ),
+          ),
+        );
+        return;
+      }
+
+      String selectedTeamId = teams.first['id'];
+      bool isSaving = false;
+
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Assign Team Lead'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("Select which team this user will lead:"),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedTeamId,
+                    decoration: const InputDecoration(
+                      labelText: "Team",
+                      border: OutlineInputBorder(),
+                    ),
+                    items: teams.map<DropdownMenuItem<String>>((t) {
+                      return DropdownMenuItem(
+                        value: t['id'] as String,
+                        child: Text(t['name'] as String),
+                      );
+                    }).toList(),
+                    onChanged: (val) =>
+                        setDialogState(() => selectedTeamId = val!),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          setDialogState(() => isSaving = true);
+                          try {
+                            final response = await apiClient.authenticatedRequest(
+                              context,
+                              "/api/hubs/$selectedTeamId/members/$userId/make-lead",
+                              method: "PATCH",
+                            );
+                            if (response.statusCode == 200 && mounted) {
+                              Navigator.pop(ctx);
+                              _fetchDetails();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('User assigned as Team Lead!'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setDialogState(() => isSaving = false);
+                          }
+                        },
+                  child: isSaving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Assign Lead'),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    } catch (e) {
+      debugPrint("Error showing team lead dialog: $e");
     }
   }
 
@@ -3080,14 +3284,34 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
                 final participant = _participants[index];
                 final user = participant['user'];
                 final bool isBlocked = participant['is_blocked'] == true;
+                final bool isPending = participant['is_approved'] == false;
+                final bool isParticipantHubAdmin =
+                    participant['is_admin'] == true;
+                final bool isParticipantHubLead =
+                    participant['is_lead'] == true;
                 final String role = user['role'] ?? 'STUDENT';
 
                 final bool isParticipantStaff =
                     role == 'ADMIN' || role == 'COMMUNITY_HEAD';
+
+                final myParticipant = _participants.firstWhere(
+                  (p) => p['user']['id'] == currentUser?['id'],
+                  orElse: () => null,
+                );
+                final bool iAmHubAdmin =
+                    isStaff ||
+                    (myParticipant != null &&
+                        myParticipant['is_admin'] == true);
+
                 final bool canBlock =
-                    isStaff &&
+                    (isStaff || iAmHubAdmin) &&
                     !isParticipantStaff &&
                     user['id'] != currentUser?['id'];
+                final bool canManageHub =
+                    widget.isGroup &&
+                    iAmHubAdmin &&
+                    user['id'] != currentUser?['id'] &&
+                    !isParticipantStaff;
 
                 return ListTile(
                   leading: CircleAvatar(
@@ -3118,7 +3342,7 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
                           padding: const EdgeInsets.only(right: 6.0),
                           child: Chip(
                             label: const Text(
-                              'Admin',
+                              'Staff',
                               style: TextStyle(
                                 fontSize: 9,
                                 color: Colors.white,
@@ -3129,12 +3353,63 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
                             padding: EdgeInsets.zero,
                           ),
                         ),
+                      if (isParticipantHubAdmin && !isParticipantStaff)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6.0),
+                          child: Chip(
+                            label: const Text(
+                              'Hub Admin',
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: Colors.white,
+                              ),
+                            ),
+                            backgroundColor: Colors.purple.shade400,
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                          ),
+                        ),
+                      if (isParticipantHubLead &&
+                          !isParticipantHubAdmin &&
+                          !isParticipantStaff)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6.0),
+                          child: Chip(
+                            label: const Text(
+                              'Team Lead',
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            backgroundColor: Colors.amber.shade400,
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                          ),
+                        ),
+                      if (isPending)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6.0),
+                          child: Chip(
+                            label: const Text(
+                              'PENDING',
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: Colors.orange,
+                              ),
+                            ),
+                            backgroundColor: Colors.orange.shade50,
+                            side: const BorderSide(color: Colors.orange),
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                          ),
+                        ),
                       if (isBlocked)
                         const Text(
                           "Blocked",
                           style: TextStyle(color: Colors.red, fontSize: 12),
                         )
-                      else
+                      else if (!isPending)
                         Text(
                           role,
                           style: const TextStyle(
@@ -3144,14 +3419,91 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
                         ),
                     ],
                   ),
-                  trailing: canBlock
+                  trailing: (canBlock || canManageHub)
                       ? PopupMenuButton<String>(
                           onSelected: (val) {
                             if (val == 'block') _blockUser(user['id'], true);
                             if (val == 'unblock') _blockUser(user['id'], false);
+                            if ([
+                              'approve',
+                              'reject',
+                              'promote',
+                              'demote',
+                              'make_lead',
+                              'remove_lead',
+                            ].contains(val)) {
+                              _handleHubAction(user['id'], val);
+                            }
                           },
                           itemBuilder: (context) => [
-                            if (!isBlocked)
+                            if (canManageHub && isPending) ...[
+                              const PopupMenuItem(
+                                value: 'approve',
+                                child: Text(
+                                  'Approve Request',
+                                  style: TextStyle(color: Colors.green),
+                                ),
+                              ),
+                              const PopupMenuItem(
+                                value: 'reject',
+                                child: Text(
+                                  'Reject Request',
+                                  style: TextStyle(color: Colors.red),
+                                ),
+                              ),
+                              const PopupMenuDivider(),
+                            ],
+                            if (canManageHub &&
+                                !isPending &&
+                                !isParticipantHubAdmin) ...[
+                              const PopupMenuItem(
+                                value: 'promote',
+                                child: Text(
+                                  'Promote to Hub Admin',
+                                  style: TextStyle(color: Colors.purple),
+                                ),
+                              ),
+                              const PopupMenuDivider(),
+                            ],
+                            if (canManageHub &&
+                                !isPending &&
+                                isParticipantHubAdmin) ...[
+                              const PopupMenuItem(
+                                value: 'demote',
+                                child: Text(
+                                  'Remove Hub Admin',
+                                  style: TextStyle(color: Colors.deepOrange),
+                                ),
+                              ),
+                              const PopupMenuDivider(),
+                            ],
+                            if (canManageHub &&
+                                !isPending &&
+                                !isParticipantHubLead &&
+                                !isParticipantHubAdmin) ...[
+                              const PopupMenuItem(
+                                value: 'make_lead',
+                                child: Text(
+                                  'Make Team Lead',
+                                  style: TextStyle(color: Colors.amber),
+                                ),
+                              ),
+                              const PopupMenuDivider(),
+                            ],
+                            if (canManageHub &&
+                                !isPending &&
+                                isParticipantHubLead &&
+                                !isParticipantHubAdmin) ...[
+                              const PopupMenuItem(
+                                value: 'remove_lead',
+                                child: Text(
+                                  'Remove Team Lead',
+                                  style: TextStyle(color: Colors.grey),
+                                ),
+                              ),
+                              const PopupMenuDivider(),
+                            ],
+                            if (canBlock && !isBlocked)
                               const PopupMenuItem(
                                 value: 'block',
                                 child: Text(
@@ -3159,7 +3511,7 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
                                   style: TextStyle(color: Colors.red),
                                 ),
                               ),
-                            if (isBlocked)
+                            if (canBlock && isBlocked)
                               const PopupMenuItem(
                                 value: 'unblock',
                                 child: Text(

@@ -189,8 +189,12 @@ class _MessagingHubScreenState extends State<MessagingHubScreen>
   }
 
   String _getChatTitle(Map<String, dynamic> conversation) {
-    if (conversation['type'] == 'DEPARTMENT' ||
-        conversation['type'] == 'GROUP') {
+    if ([
+      'DEPARTMENT',
+      'GROUP',
+      'CLUB',
+      'STUDY_GROUP',
+    ].contains(conversation['type'])) {
       return conversation['name'] ?? 'Group Chat';
     }
 
@@ -270,324 +274,354 @@ class _MessagingHubScreenState extends State<MessagingHubScreen>
     );
   }
 
+  Widget _buildConversationList(List<dynamic> convList, ThemeData theme) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (convList.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.chat_bubble_outline,
+              size: 64,
+              color: Colors.grey.shade400,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'No messages yet.',
+              style: TextStyle(color: Colors.grey, fontSize: 16),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () => _fetchConversations(silent: false),
+      child: ListView.separated(
+        itemCount: convList.length,
+        separatorBuilder: (context, index) =>
+            const Divider(height: 1, indent: 72),
+        itemBuilder: (context, index) {
+          final conv = convList[index];
+          final title = _getChatTitle(conv);
+          final lastMsg = conv['last_message'];
+          final unreadCount = conv['unread_count'] ?? 0;
+          final hasUnread = unreadCount > 0;
+          final isTyping = _typingStatus[conv['id']] == true;
+          final draftText = _drafts[conv['id']];
+
+          bool isStaffDM = false;
+          if (conv['type'] == 'DM') {
+            final participants = conv['participants'] as List<dynamic>;
+            final other = participants.firstWhere(
+              (p) => p['user']['id'] != _currentUserId,
+              orElse: () => participants.first,
+            );
+            final role = other['user']['role'];
+            if (role == 'ADMIN' || role == 'COMMUNITY_HEAD') {
+              isStaffDM = true;
+            }
+          }
+
+          String displayText = "";
+          IconData? attachmentIcon;
+
+          if (lastMsg != null) {
+            displayText = lastMsg['content'];
+            if (displayText.contains('[ATTACHMENT|')) {
+              final startIndex = displayText.indexOf('[ATTACHMENT|');
+              final closeIndex = displayText.indexOf(']', startIndex);
+              if (closeIndex != -1) {
+                final attachmentData = displayText
+                    .substring(startIndex + 12, closeIndex)
+                    .split('|');
+                if (attachmentData.length >= 3) {
+                  final ext = attachmentData[0].toLowerCase();
+                  final isImage = [
+                    'jpg',
+                    'jpeg',
+                    'png',
+                    'gif',
+                    'webp',
+                  ].contains(ext);
+                  attachmentIcon = isImage ? Icons.image : Icons.attach_file;
+                  final textPart = displayText
+                      .replaceRange(startIndex, closeIndex + 1, '')
+                      .trim();
+                  if (textPart.isNotEmpty) {
+                    displayText = textPart;
+                  } else {
+                    displayText = isImage ? 'Photo' : 'Document';
+                  }
+                }
+              }
+            }
+            final isGroup =
+                conv['type'] == 'GROUP' ||
+                conv['type'] == 'DEPARTMENT' ||
+                conv['type'] == 'CLUB' ||
+                conv['type'] == 'STUDY_GROUP' ||
+                conv['type'] == 'TEAM';
+
+            if (isGroup && lastMsg['sender']['id'] != _currentUserId) {
+              final senderName = lastMsg['sender']['first_name'];
+              displayText = "$senderName: $displayText";
+            }
+          }
+
+          return ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 8,
+            ),
+            leading: CircleAvatar(
+              radius: 28,
+              backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
+              child:
+                  (conv['type'] == 'GROUP' ||
+                          conv['type'] == 'DEPARTMENT' ||
+                          conv['type'] == 'CLUB' ||
+                          conv['type'] == 'STUDY_GROUP' ||
+                          conv['type'] == 'TEAM') &&
+                      _groupIcons.containsKey(conv['id'])
+                  ? Icon(
+                      _groupIcons[conv['id']],
+                      color: theme.colorScheme.primary,
+                      size: 24,
+                    )
+                  : Text(
+                      title[0].toUpperCase(),
+                      style: TextStyle(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                      ),
+                    ),
+            ),
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: hasUnread ? FontWeight.w900 : FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (isStaffDM) ...[
+                  const SizedBox(width: 4),
+                  const Icon(Icons.verified, color: Colors.blue, size: 16),
+                ],
+              ],
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (lastMsg != null)
+                  Row(
+                    children: [
+                      if (lastMsg['sender']['id'] == _currentUserId)
+                        _buildMessageStatusIcon(lastMsg),
+                      if (attachmentIcon != null)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 4.0),
+                          child: Icon(
+                            attachmentIcon,
+                            size: 16,
+                            color: Colors.blueGrey,
+                          ),
+                        ),
+                      Expanded(
+                        child: Text(
+                          displayText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: hasUnread
+                                ? theme.colorScheme.inverseSurface
+                                : Colors.grey,
+                            fontWeight: hasUnread
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  const Text(
+                    "Started a conversation",
+                    style: TextStyle(
+                      fontStyle: FontStyle.italic,
+                      color: Colors.grey,
+                    ),
+                  ),
+                if (isTyping)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2.0),
+                    child: Text(
+                      "Typing...",
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontStyle: FontStyle.italic,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  )
+                else if (draftText != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2.0),
+                    child: Row(
+                      children: [
+                        const Text(
+                          "Draft: ",
+                          style: TextStyle(
+                            color: Colors.redAccent,
+                            fontStyle: FontStyle.italic,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            draftText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontStyle: FontStyle.italic,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (lastMsg != null)
+                  Text(
+                    _formatHubTime(lastMsg['created_at']),
+                    style: TextStyle(
+                      color: hasUnread
+                          ? theme.colorScheme.primary
+                          : Colors.grey,
+                      fontSize: 12,
+                      fontWeight: hasUnread
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                  ),
+                if (hasUnread) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      unreadCount.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            onTap: () {
+              final isGroup =
+                  conv['type'] == 'GROUP' ||
+                  conv['type'] == 'DEPARTMENT' ||
+                  conv['type'] == 'CLUB' ||
+                  conv['type'] == 'STUDY_GROUP' ||
+                  conv['type'] == 'TEAM';
+
+              bool initialOnline = false;
+              String? initialLastSeen;
+
+              if (!isGroup) {
+                final participants = conv['participants'] as List<dynamic>;
+                final other = participants.firstWhere(
+                  (p) => p['user']['id'] != _currentUserId,
+                  orElse: () => participants.first,
+                );
+                initialOnline = other['user']['is_online'] == true;
+                initialLastSeen = other['user']['last_seen'];
+              }
+
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ChatScreen(
+                    conversationId: conv['id'],
+                    chatTitle: title,
+                    isGroup: isGroup,
+                    initialOnline: initialOnline,
+                    initialLastSeen: initialLastSeen,
+                  ),
+                ),
+              ).then((_) => _fetchConversations(silent: true));
+            },
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Messages',
-          style: TextStyle(fontWeight: FontWeight.bold),
+    final chatConvs = _conversations
+        .where((c) => ['DM', 'DEPARTMENT'].contains(c['type']))
+        .toList();
+    final hubConvs = _conversations
+        .where(
+          (c) => ['GROUP', 'CLUB', 'STUDY_GROUP', 'TEAM'].contains(c['type']),
+        )
+        .toList();
+
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text(
+            'Messages',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          bottom: TabBar(
+            labelColor: theme.colorScheme.primary,
+            unselectedLabelColor: Colors.grey,
+            indicatorColor: theme.colorScheme.primary,
+            tabs: const [
+              Tab(text: "Chats"),
+              Tab(text: "Hubs & Teams"),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            _buildConversationList(chatConvs, theme),
+            _buildConversationList(hubConvs, theme),
+          ],
         ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _conversations.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.chat_bubble_outline,
-                    size: 64,
-                    color: Colors.grey.shade400,
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'No messages yet.',
-                    style: TextStyle(color: Colors.grey, fontSize: 16),
-                  ),
-                ],
-              ),
-            )
-          : RefreshIndicator(
-              onRefresh: () => _fetchConversations(silent: false),
-              child: ListView.separated(
-                itemCount: _conversations.length,
-                separatorBuilder: (context, index) =>
-                    const Divider(height: 1, indent: 72),
-                itemBuilder: (context, index) {
-                  final conv = _conversations[index];
-                  final title = _getChatTitle(conv);
-                  final lastMsg = conv['last_message'];
-                  final unreadCount = conv['unread_count'] ?? 0;
-                  final hasUnread = unreadCount > 0;
-                  final isTyping = _typingStatus[conv['id']] == true;
-                  final draftText = _drafts[conv['id']];
-
-                  bool isStaffDM = false;
-                  if (conv['type'] == 'DM') {
-                    final participants = conv['participants'] as List<dynamic>;
-                    final other = participants.firstWhere(
-                      (p) => p['user']['id'] != _currentUserId,
-                      orElse: () => participants.first,
-                    );
-                    final role = other['user']['role'];
-                    if (role == 'ADMIN' || role == 'COMMUNITY_HEAD') {
-                      isStaffDM = true;
-                    }
-                  }
-
-                  String displayText = "";
-                  IconData? attachmentIcon;
-
-                  if (lastMsg != null) {
-                    displayText = lastMsg['content'];
-                    if (displayText.contains('[ATTACHMENT|')) {
-                      final startIndex = displayText.indexOf('[ATTACHMENT|');
-                      final closeIndex = displayText.indexOf(']', startIndex);
-
-                      if (closeIndex != -1) {
-                        final attachmentData = displayText
-                            .substring(startIndex + 12, closeIndex)
-                            .split('|');
-                        if (attachmentData.length >= 3) {
-                          final ext = attachmentData[0].toLowerCase();
-                          final isImage = [
-                            'jpg',
-                            'jpeg',
-                            'png',
-                            'gif',
-                            'webp',
-                          ].contains(ext);
-
-                          attachmentIcon = isImage
-                              ? Icons.image
-                              : Icons.attach_file;
-
-                          final textPart = displayText
-                              .replaceRange(startIndex, closeIndex + 1, '')
-                              .trim();
-
-                          if (textPart.isNotEmpty) {
-                            displayText = textPart;
-                          } else {
-                            displayText = isImage ? 'Photo' : 'Document';
-                          }
-                        }
-                      }
-                    }
-
-                    final isGroup =
-                        conv['type'] == 'GROUP' || conv['type'] == 'DEPARTMENT';
-                    if (isGroup && lastMsg['sender']['id'] != _currentUserId) {
-                      final senderName = lastMsg['sender']['first_name'];
-                      displayText = "$senderName: $displayText";
-                    }
-                  }
-
-                  return ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    leading: CircleAvatar(
-                      radius: 28,
-                      backgroundColor: theme.colorScheme.primary.withValues(
-                        alpha: 0.1,
-                      ),
-                      child:
-                          (conv['type'] == 'GROUP' ||
-                                  conv['type'] == 'DEPARTMENT') &&
-                              _groupIcons.containsKey(conv['id'])
-                          ? Icon(
-                              _groupIcons[conv['id']],
-                              color: theme.colorScheme.primary,
-                              size: 24,
-                            )
-                          : Text(
-                              title[0].toUpperCase(),
-                              style: TextStyle(
-                                color: theme.colorScheme.primary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 20,
-                              ),
-                            ),
-                    ),
-                    title: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            title,
-                            style: TextStyle(
-                              fontWeight: hasUnread
-                                  ? FontWeight.w900
-                                  : FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (isStaffDM) ...[
-                          const SizedBox(width: 4),
-                          const Icon(
-                            Icons.verified,
-                            color: Colors.blue,
-                            size: 16,
-                          ),
-                        ],
-                      ],
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (lastMsg != null)
-                          Row(
-                            children: [
-                              if (lastMsg['sender']['id'] == _currentUserId)
-                                _buildMessageStatusIcon(lastMsg),
-                              if (attachmentIcon != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 4.0),
-                                  child: Icon(
-                                    attachmentIcon,
-                                    size: 16,
-                                    color: Colors.blueGrey,
-                                  ),
-                                ),
-                              Expanded(
-                                child: Text(
-                                  displayText,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: hasUnread
-                                        ? theme.colorScheme.inverseSurface
-                                        : Colors.grey,
-                                    fontWeight: hasUnread
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          )
-                        else
-                          const Text(
-                            "Started a conversation",
-                            style: TextStyle(
-                              fontStyle: FontStyle.italic,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        if (isTyping)
-                          const Padding(
-                            padding: EdgeInsets.only(top: 2.0),
-                            child: Text(
-                              "Typing...",
-                              style: TextStyle(
-                                color: Colors.green,
-                                fontStyle: FontStyle.italic,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
-                          )
-                        else if (draftText != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2.0),
-                            child: Row(
-                              children: [
-                                const Text(
-                                  "Draft: ",
-                                  style: TextStyle(
-                                    color: Colors.redAccent,
-                                    fontStyle: FontStyle.italic,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Text(
-                                    draftText,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: Colors.grey,
-                                      fontStyle: FontStyle.italic,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        if (lastMsg != null)
-                          Text(
-                            _formatHubTime(lastMsg['created_at']),
-                            style: TextStyle(
-                              color: hasUnread
-                                  ? theme.colorScheme.primary
-                                  : Colors.grey,
-                              fontSize: 12,
-                              fontWeight: hasUnread
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                            ),
-                          ),
-                        if (hasUnread) ...[
-                          const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Text(
-                              unreadCount.toString(),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    onTap: () {
-                      final isGroup =
-                          conv['type'] == 'GROUP' ||
-                          conv['type'] == 'DEPARTMENT';
-                      bool initialOnline = false;
-                      String? initialLastSeen;
-
-                      if (!isGroup) {
-                        final participants =
-                            conv['participants'] as List<dynamic>;
-                        final other = participants.firstWhere(
-                          (p) => p['user']['id'] != _currentUserId,
-                          orElse: () => participants.first,
-                        );
-                        initialOnline = other['user']['is_online'] == true;
-                        initialLastSeen = other['user']['last_seen'];
-                      }
-
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ChatScreen(
-                            conversationId: conv['id'],
-                            chatTitle: title,
-                            isGroup: isGroup,
-                            initialOnline: initialOnline,
-                            initialLastSeen: initialLastSeen,
-                          ),
-                        ),
-                      ).then((_) => _fetchConversations(silent: true));
-                    },
-                  );
-                },
-              ),
-            ),
     );
   }
 }

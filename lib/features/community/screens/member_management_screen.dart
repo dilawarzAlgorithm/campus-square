@@ -50,26 +50,6 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
     }
   }
 
-  Future<void> _updateRole(String userId, String newRole) async {
-    try {
-      final response = await _apiClient.authenticatedRequest(
-        context,
-        "/api/community/members/$userId/role",
-        method: "PATCH",
-        body: jsonEncode({"role": newRole}),
-      );
-
-      if (response.statusCode == 200) {
-        _fetchMembers();
-        _showSuccess("User role updated to $newRole");
-      } else {
-        _showError(jsonDecode(response.body)['detail'] ?? "Update failed");
-      }
-    } catch (e) {
-      _showError("Update error: $e");
-    }
-  }
-
   Future<void> _toggleBlock(String userId, bool blockStatus) async {
     try {
       final response = await _apiClient.authenticatedRequest(
@@ -419,12 +399,6 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
                             if (value == 'unblock') {
                               _toggleBlock(user['id'], false);
                             }
-                            if (value == 'promote') {
-                              _updateRole(user['id'], 'CAPTAIN');
-                            }
-                            if (value == 'demote') {
-                              _updateRole(user['id'], 'STUDENT');
-                            }
                             if (value == 'edit_roll') {
                               _showEditRollNumberDialog(user);
                             }
@@ -441,17 +415,6 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
                               value: 'edit_storage',
                               child: Text('Edit Storage Quota'),
                             ),
-                            const PopupMenuDivider(),
-                            if (role == 'STUDENT')
-                              const PopupMenuItem(
-                                value: 'promote',
-                                child: Text('Promote to Captain'),
-                              ),
-                            if (role == 'CAPTAIN')
-                              const PopupMenuItem(
-                                value: 'demote',
-                                child: Text('Demote to Student'),
-                              ),
                             const PopupMenuDivider(),
                             if (!isBlocked)
                               const PopupMenuItem(

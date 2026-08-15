@@ -12,6 +12,7 @@ import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 import 'package:campus_square/features/vault/screens/vault_screen.dart';
 import 'package:campus_square/features/profile/screens/profile_screen.dart';
 import 'package:campus_square/features/square/screens/square_screen.dart';
+import 'package:campus_square/features/hubs/screens/hubs_screen.dart';
 import 'package:campus_square/features/bazaar/screens/bazaar_screen.dart';
 import 'package:campus_square/features/chat/screens/messaging_hub_screen.dart';
 
@@ -33,6 +34,7 @@ class _DashboardState extends State<Dashboard> {
   final List<Widget> _screens = [
     const SquareScreen(),
     const BazaarScreen(),
+    const HubsScreen(),
     const AcademicVaultScreen(),
     const ProfileScreen(),
   ];
@@ -311,6 +313,8 @@ class _DashboardState extends State<Dashboard> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         type: BottomNavigationBarType.fixed,
+        selectedFontSize: 11,
+        unselectedFontSize: 11,
         onTap: (index) {
           setState(() {
             _currentIndex = index;
@@ -326,6 +330,11 @@ class _DashboardState extends State<Dashboard> {
             icon: Icon(Icons.shopping_bag_outlined),
             activeIcon: Icon(Icons.shopping_bag),
             label: 'Bazaar',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.hub_outlined),
+            activeIcon: Icon(Icons.hub),
+            label: 'Hubs',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.folder_outlined),

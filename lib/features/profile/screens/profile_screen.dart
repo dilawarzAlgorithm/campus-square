@@ -180,113 +180,113 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 32),
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF4F46E5), Color(0xFF10B981)],
-                begin: Alignment.bottomLeft,
-                end: Alignment.topRight,
-              ),
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Campus Karma',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        _getKarmaIcon(level),
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  '$karma pts',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 42,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: LinearProgressIndicator(
-                          value: progress,
-                          backgroundColor: Colors.white.withValues(alpha: 0.3),
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                            Colors.white,
-                          ),
-                          minHeight: 8,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Level $level',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      nextTierText,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.8),
-                        fontSize: 14,
-                      ),
-                    ),
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 32),
 
+          // Container(
+          //   padding: const EdgeInsets.all(24),
+          //   decoration: BoxDecoration(
+          //     gradient: const LinearGradient(
+          //       colors: [Color(0xFF4F46E5), Color(0xFF10B981)],
+          //       begin: Alignment.bottomLeft,
+          //       end: Alignment.topRight,
+          //     ),
+          //     borderRadius: BorderRadius.circular(24),
+          //     boxShadow: [
+          //       BoxShadow(
+          //         color: const Color(0xFF10B981).withValues(alpha: 0.3),
+          //         blurRadius: 12,
+          //         offset: const Offset(0, 6),
+          //       ),
+          //     ],
+          //   ),
+          //   child: Column(
+          //     crossAxisAlignment: CrossAxisAlignment.start,
+          //     children: [
+          //       Row(
+          //         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          //         children: [
+          //           const Text(
+          //             'Campus Karma',
+          //             style: TextStyle(
+          //               color: Colors.white,
+          //               fontSize: 18,
+          //               fontWeight: FontWeight.bold,
+          //             ),
+          //           ),
+          //           Container(
+          //             padding: const EdgeInsets.all(6),
+          //             decoration: BoxDecoration(
+          //               color: Colors.white.withValues(alpha: 0.2),
+          //               shape: BoxShape.circle,
+          //             ),
+          //             child: Icon(
+          //               _getKarmaIcon(level),
+          //               color: Colors.white,
+          //               size: 20,
+          //             ),
+          //           ),
+          //         ],
+          //       ),
+          //       const SizedBox(height: 24),
+          //       Text(
+          //         '$karma pts',
+          //         style: const TextStyle(
+          //           color: Colors.white,
+          //           fontSize: 42,
+          //           fontWeight: FontWeight.bold,
+          //         ),
+          //       ),
+          //       const SizedBox(height: 16),
+          //       Row(
+          //         children: [
+          //           Expanded(
+          //             child: ClipRRect(
+          //               borderRadius: BorderRadius.circular(10),
+          //               child: LinearProgressIndicator(
+          //                 value: progress,
+          //                 backgroundColor: Colors.white.withValues(alpha: 0.3),
+          //                 valueColor: const AlwaysStoppedAnimation<Color>(
+          //                   Colors.white,
+          //                 ),
+          //                 minHeight: 8,
+          //               ),
+          //             ),
+          //           ),
+          //           const SizedBox(width: 12),
+          //           Text(
+          //             'Level $level',
+          //             style: const TextStyle(
+          //               color: Colors.white,
+          //               fontWeight: FontWeight.bold,
+          //               fontSize: 16,
+          //             ),
+          //           ),
+          //         ],
+          //       ),
+          //       const SizedBox(height: 12),
+          //       Row(
+          //         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          //         children: [
+          //           Text(
+          //             nextTierText,
+          //             style: TextStyle(
+          //               color: Colors.white.withValues(alpha: 0.8),
+          //               fontSize: 14,
+          //             ),
+          //           ),
+          //           Text(
+          //             title,
+          //             style: const TextStyle(
+          //               color: Colors.white,
+          //               fontSize: 14,
+          //               fontWeight: FontWeight.bold,
+          //             ),
+          //           ),
+          //         ],
+          //       ),
+          //     ],
+          //   ),
+          // ),
+          // const SizedBox(height: 32),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
             child: Text(
