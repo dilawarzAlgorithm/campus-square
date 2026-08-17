@@ -47,7 +47,6 @@ class CampusSquareAuth extends ChangeNotifier {
   Exception _formatException(dynamic e) {
     final errorStr = e.toString();
 
-    // Mask raw socket/connection errors
     if (e is SocketException ||
         errorStr.contains('SocketException') ||
         errorStr.contains('Connection refused')) {
@@ -55,18 +54,15 @@ class CampusSquareAuth extends ChangeNotifier {
         "Unable to connect to the server. Please check your connection and try again.",
       );
     }
-    // Mask timeouts
     if (e is TimeoutException || errorStr.contains('TimeoutException')) {
       return Exception("The connection timed out. Please try again.");
     }
-    // Mask general http client errors
     if (e is http.ClientException || errorStr.contains('ClientException')) {
       return Exception(
         "A network error occurred. Please check your connection.",
       );
     }
 
-    // If it's an Exception we threw manually, preserve our friendly message
     if (e is Exception) {
       return e;
     }
@@ -90,7 +86,6 @@ class CampusSquareAuth extends ChangeNotifier {
           final data = jsonDecode(response.body);
           final detail = data["detail"]?.toString().toLowerCase() ?? "";
           if (detail.contains("not verified")) {
-            // Keep this exact string, the UI routes to the OTP screen based on it
             message = "Account email is not verified yet.";
           } else if (detail.contains("blocked") ||
               detail.contains("suspended")) {
@@ -442,7 +437,7 @@ class CampusSquareAuth extends ChangeNotifier {
           )
           .timeout(const Duration(seconds: 15));
 
-      _handleHttpError(response); // Will throw masked exception if >= 300
+      _handleHttpError(response);
 
       final data = jsonDecode(response.body);
       await _storage.saveSession(

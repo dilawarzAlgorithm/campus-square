@@ -11,19 +11,19 @@ import 'package:campus_square/features/bazaar/screens/my_bazaar_listings_screen.
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
-  IconData _getKarmaIcon(int level) {
-    switch (level) {
-      case 4:
-        return Icons.diamond_rounded; // Campus Legend
-      case 3:
-        return Icons.local_library_rounded; // Scholar
-      case 2:
-        return Icons.verified_user_rounded; // Contributor
-      case 1:
-      default:
-        return Icons.eco_rounded; // Novice
-    }
-  }
+  // IconData _getKarmaIcon(int level) {
+  //   switch (level) {
+  //     case 4:
+  //       return Icons.diamond_rounded; // Campus Legend
+  //     case 3:
+  //       return Icons.local_library_rounded; // Scholar
+  //     case 2:
+  //       return Icons.verified_user_rounded; // Contributor
+  //     case 1:
+  //     default:
+  //       return Icons.eco_rounded; // Novice
+  //   }
+  // }
 
   void _showEditNameDialog(BuildContext context, CampusSquareAuth auth) {
     final firstController = TextEditingController(
@@ -89,16 +89,16 @@ class ProfileScreen extends StatelessWidget {
     final user = auth.user;
     final theme = Theme.of(context);
 
-    final karma = user?["karma"] ?? 0;
-    final karmaTier = user?["karma_tier"] as Map<String, dynamic>?;
-    final int level = karmaTier?["level"] ?? 1;
-    final String title = karmaTier?["title"] ?? "Novice";
-    final double progress = (karmaTier?["progress_percentage"] ?? 0.0)
-        .toDouble();
-    final String nextTierText =
-        karmaTier != null && karmaTier["points_to_next"] != null
-        ? '${karmaTier["points_to_next"]} pts to ${karmaTier["next_tier_title"]}'
-        : 'Max Level Reached!';
+    // final karma = user?["karma"] ?? 0;
+    // final karmaTier = user?["karma_tier"] as Map<String, dynamic>?;
+    // final int level = karmaTier?["level"] ?? 1;
+    // final String title = karmaTier?["title"] ?? "Novice";
+    // final double progress = (karmaTier?["progress_percentage"] ?? 0.0)
+    //     .toDouble();
+    // final String nextTierText =
+    //     karmaTier != null && karmaTier["points_to_next"] != null
+    //     ? '${karmaTier["points_to_next"]} pts to ${karmaTier["next_tier_title"]}'
+    //     : 'Max Level Reached!';
 
     final int storageUsed = user?["storage_used"] ?? 0;
     final int storageLimit =

@@ -26,22 +26,23 @@ class LocalNotificationService {
     await flutterLocalNotificationsPlugin.initialize(
       settings: initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
-        if (response.payload == 'alarm_screen') {
+        if (response.payload != null &&
+            response.payload!.startsWith('alarm_screen')) {
           navigatorKey.currentState?.pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const AlarmScreen()),
+            MaterialPageRoute(
+              builder: (_) => AlarmScreen(payload: response.payload),
+            ),
             (route) => false,
           );
         }
       },
     );
-
     debugPrint("Local Notifications Initialized.");
   }
 
   static Future<void> _requestPermissionsSafely() async {
     final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
         FlutterLocalNotificationsPlugin();
-
     final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
         flutterLocalNotificationsPlugin
             .resolvePlatformSpecificImplementation<
@@ -49,7 +50,6 @@ class LocalNotificationService {
             >();
 
     await androidImplementation?.requestNotificationsPermission();
-
     await androidImplementation?.requestExactAlarmsPermission();
     await androidImplementation?.requestFullScreenIntentPermission();
 
@@ -65,9 +65,9 @@ class LocalNotificationService {
     int reminderMinutes = 10,
   }) async {
     await _requestPermissionsSafely();
-
     final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
         FlutterLocalNotificationsPlugin();
+
     await flutterLocalNotificationsPlugin.cancelAll();
 
     const AndroidNotificationDetails androidPlatformChannelSpecifics =
@@ -127,6 +127,7 @@ class LocalNotificationService {
       ).add(durationUntilAlarm);
 
       final safeId = event.id.hashCode.abs() % 2147483647;
+      final payloadStr = 'alarm_screen|${event.id}|${event.title}';
 
       try {
         await flutterLocalNotificationsPlugin.zonedSchedule(
@@ -137,13 +138,12 @@ class LocalNotificationService {
           notificationDetails: platformChannelSpecifics,
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
           matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
-          payload: 'alarm_screen',
+          payload: payloadStr,
         );
       } catch (e) {
         debugPrint("Failed to schedule alarm for ${event.title}: $e");
       }
     }
-
     debugPrint("Offline Reminders Scheduled Successfully!");
   }
 }

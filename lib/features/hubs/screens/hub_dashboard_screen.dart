@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import 'package:campus_square/core/network/api_client.dart';
 import 'package:campus_square/features/auth/controllers/auth_provider.dart';
 import 'package:campus_square/features/chat/screens/chat_screen.dart';
@@ -73,6 +74,60 @@ class _HubDashboardScreenState extends State<HubDashboardScreen> {
       }
     } catch (e) {
       //pass
+    }
+  }
+
+  void _confirmDeleteHub() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Hub?'),
+        content: const Text(
+          'Are you sure you want to delete this hub? This action is permanent and will remove all teams, messages, media, and members inside it.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _deleteHub();
+            },
+            child: const Text('Delete Hub'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteHub() async {
+    setState(() => _isLoading = true);
+    try {
+      final response = await _apiClient.authenticatedRequest(
+        context,
+        "/api/hubs/${widget.hubId}",
+        method: "DELETE",
+      );
+      if (response.statusCode == 200 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Hub deleted successfully.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context, true);
+      } else {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      debugPrint("Delete Hub Error: $e");
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -340,6 +395,12 @@ class _HubDashboardScreenState extends State<HubDashboardScreen> {
         actions: [
           if (canManageTeams) ...[
             IconButton(
+              icon: const Icon(Icons.delete_forever),
+              color: Colors.redAccent,
+              tooltip: "Delete Hub",
+              onPressed: _confirmDeleteHub,
+            ),
+            IconButton(
               icon: const Icon(Icons.person),
               tooltip: "Assign Team Lead",
               onPressed: _showAssignLeadDialog,
@@ -383,8 +444,8 @@ class _HubDashboardScreenState extends State<HubDashboardScreen> {
                   ),
                   subtitle: const Text("Main discussion area for all members"),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    Navigator.push(
+                  onTap: () async {
+                    final result = await Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => ChatScreen(
@@ -394,6 +455,10 @@ class _HubDashboardScreenState extends State<HubDashboardScreen> {
                         ),
                       ),
                     );
+                    if (!context.mounted) return;
+                    if (result == true && mounted) {
+                      Navigator.pop(context, true);
+                    }
                   },
                 ),
                 Padding(
@@ -469,8 +534,8 @@ class _HubDashboardScreenState extends State<HubDashboardScreen> {
                                 foregroundColor: theme.colorScheme.primary,
                                 elevation: 0,
                               ),
-                              onPressed: () {
-                                Navigator.push(
+                              onPressed: () async {
+                                final result = await Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) => ChatScreen(
@@ -480,6 +545,10 @@ class _HubDashboardScreenState extends State<HubDashboardScreen> {
                                     ),
                                   ),
                                 );
+
+                                if (result == true) {
+                                  _fetchTeams();
+                                }
                               },
                               child: const Text("Open"),
                             )

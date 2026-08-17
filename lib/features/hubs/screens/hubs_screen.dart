@@ -107,178 +107,194 @@ class _HubsScreenState extends State<HubsScreen>
 
   Widget _buildHubList(List<dynamic> hubs) {
     if (hubs.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.hub_outlined, size: 64, color: Colors.grey.shade400),
-            const SizedBox(height: 16),
-            const Text(
-              'No groups found.',
-              style: TextStyle(color: Colors.grey),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: hubs.length,
-      itemBuilder: (context, index) {
-        final hub = hubs[index];
-        final bool isMember = hub['is_member'] == true;
-        final bool isPending = hub['is_pending'] == true;
-        final bool isSaved = hub['is_saved'] == true;
-
-        return Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
-          ),
-          margin: const EdgeInsets.only(bottom: 12),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
+      return RefreshIndicator(
+        onRefresh: _fetchHubs,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Container(
+            height: MediaQuery.of(context).size.height * 0.5,
+            alignment: Alignment.center,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundColor: Theme.of(
-                    context,
-                  ).colorScheme.primary.withValues(alpha: 0.1),
-                  backgroundImage: hub['avatar_url'] != null
-                      ? CachedNetworkImageProvider(hub['avatar_url'])
-                      : null,
-                  child: hub['avatar_url'] == null
-                      ? Icon(
-                          Icons.groups,
-                          color: Theme.of(context).colorScheme.primary,
-                        )
-                      : null,
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              hub['name'],
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (isSaved)
-                            const Padding(
-                              padding: EdgeInsets.only(left: 4.0),
-                              child: Icon(
-                                Icons.star,
-                                size: 14,
-                                color: Colors.amber,
-                              ),
-                            ),
-                        ],
-                      ),
-                      if (hub['description'] != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4.0),
-                          child: Text(
-                            hub['description'],
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Colors.grey.shade700,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Icon(
-                            hub['privacy'] == 'PUBLIC'
-                                ? Icons.public
-                                : Icons.lock,
-                            size: 12,
-                            color: Colors.grey,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            "${hub['member_count']} members",
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  children: [
-                    isMember
-                        ? ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Theme.of(
-                                context,
-                              ).colorScheme.primaryContainer,
-                              foregroundColor: Theme.of(
-                                context,
-                              ).colorScheme.primary,
-                              elevation: 0,
-                            ),
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => HubDashboardScreen(
-                                    hubId: hub['id'],
-                                    hubName: hub['name'],
-                                    isHubAdmin: hub['is_admin'] == true,
-                                  ),
-                                ),
-                              );
-                            },
-                            child: const Text("Open"),
-                          )
-                        : OutlinedButton(
-                            onPressed: isPending
-                                ? null
-                                : () => _joinHub(hub['id']),
-                            child: Text(isPending ? "Pending" : "Join"),
-                          ),
-                    IconButton(
-                      icon: Icon(
-                        isSaved ? Icons.star : Icons.star_border,
-                        color: isSaved ? Colors.amber : Colors.grey,
-                        size: 20,
-                      ),
-                      onPressed: () => _toggleSave(hub['id']),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    ),
-                  ],
+                Icon(Icons.hub_outlined, size: 64, color: Colors.grey.shade400),
+                const SizedBox(height: 16),
+                const Text(
+                  'No groups found.',
+                  style: TextStyle(color: Colors.grey),
                 ),
               ],
             ),
           ),
-        );
-      },
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _fetchHubs,
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        itemCount: hubs.length,
+        itemBuilder: (context, index) {
+          final hub = hubs[index];
+          final bool isMember = hub['is_member'] == true;
+          final bool isPending = hub['is_pending'] == true;
+          final bool isSaved = hub['is_saved'] == true;
+
+          return Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
+            ),
+            margin: const EdgeInsets.only(bottom: 12),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.1),
+                    backgroundImage: hub['avatar_url'] != null
+                        ? CachedNetworkImageProvider(hub['avatar_url'])
+                        : null,
+                    child: hub['avatar_url'] == null
+                        ? Icon(
+                            Icons.groups,
+                            color: Theme.of(context).colorScheme.primary,
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                hub['name'],
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (isSaved)
+                              const Padding(
+                                padding: EdgeInsets.only(left: 4.0),
+                                child: Icon(
+                                  Icons.star,
+                                  size: 14,
+                                  color: Colors.amber,
+                                ),
+                              ),
+                          ],
+                        ),
+                        if (hub['description'] != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4.0),
+                            child: Text(
+                              hub['description'],
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.grey.shade700,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Icon(
+                              hub['privacy'] == 'PUBLIC'
+                                  ? Icons.public
+                                  : Icons.lock,
+                              size: 12,
+                              color: Colors.grey,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              "${hub['member_count']} members",
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    children: [
+                      isMember
+                          ? ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                backgroundColor: Theme.of(
+                                  context,
+                                ).colorScheme.primaryContainer,
+                                foregroundColor: Theme.of(
+                                  context,
+                                ).colorScheme.primary,
+                                elevation: 0,
+                              ),
+                              onPressed: () async {
+                                final result = await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => HubDashboardScreen(
+                                      hubId: hub['id'],
+                                      hubName: hub['name'],
+                                      isHubAdmin: hub['is_admin'] == true,
+                                    ),
+                                  ),
+                                );
+
+                                if (result == true) {
+                                  _fetchHubs();
+                                }
+                              },
+                              child: const Text("Open"),
+                            )
+                          : OutlinedButton(
+                              onPressed: isPending
+                                  ? null
+                                  : () => _joinHub(hub['id']),
+                              child: Text(isPending ? "Pending" : "Join"),
+                            ),
+                      IconButton(
+                        icon: Icon(
+                          isSaved ? Icons.star : Icons.star_border,
+                          color: isSaved ? Colors.amber : Colors.grey,
+                          size: 20,
+                        ),
+                        onPressed: () => _toggleSave(hub['id']),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    // FIX: Removed the Scaffold AppBar to stop the double-appbar design flaw!
     return DefaultTabController(
       length: 2,
       child: Column(

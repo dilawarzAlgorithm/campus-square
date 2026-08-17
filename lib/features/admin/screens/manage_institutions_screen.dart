@@ -312,6 +312,79 @@ class _ManageInstitutionsScreenState extends State<ManageInstitutionsScreen> {
     );
   }
 
+  Future<void> _toggleBlock(String id, bool block) async {
+    try {
+      final res = await _apiClient.authenticatedRequest(
+        context,
+        "/api/admin/institutions/$id/block",
+        method: "PATCH",
+        body: jsonEncode({"is_blocked": block}),
+      );
+      if (res.statusCode == 200) {
+        _fetchInstitutions();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(block ? 'Campus suspended' : 'Campus reactivated'),
+              backgroundColor: block ? Colors.red : Colors.green,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint("Failed to toggle block status: $e");
+    }
+  }
+
+  void _showDeleteInstConfirmation(String id, String shortName) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Campus Permanently?'),
+        content: Text(
+          'Are you entirely sure you want to completely remove $shortName? '
+          'This will permanently delete all users, messages, resources, and data associated with this campus.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                final res = await _apiClient.authenticatedRequest(
+                  context,
+                  "/api/admin/institutions/$id",
+                  method: "DELETE",
+                );
+                if (res.statusCode == 200) {
+                  _fetchInstitutions();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Campus permanently deleted'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                }
+              } catch (e) {
+                debugPrint("Failed to delete campus: $e");
+              }
+            },
+            child: const Text('Delete Permanently'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -331,20 +404,50 @@ class _ManageInstitutionsScreenState extends State<ManageInstitutionsScreen> {
               itemCount: _institutions.length,
               itemBuilder: (context, index) {
                 final inst = _institutions[index];
+                final bool isBlocked = inst['is_blocked'] == true;
+
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   child: ListTile(
                     leading: CircleAvatar(
-                      backgroundColor: Theme.of(
-                        context,
-                      ).colorScheme.primary.withValues(alpha: 0.1),
-                      child: Text(inst['short_name'][0]),
+                      backgroundColor: isBlocked
+                          ? Colors.red.withValues(alpha: 0.1)
+                          : Theme.of(
+                              context,
+                            ).colorScheme.primary.withValues(alpha: 0.1),
+                      child: Text(
+                        inst['short_name'][0],
+                        style: TextStyle(
+                          color: isBlocked
+                              ? Colors.red
+                              : Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
                     ),
                     title: Text(
                       inst['name'],
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        decoration: isBlocked
+                            ? TextDecoration.lineThrough
+                            : null,
+                      ),
                     ),
-                    subtitle: Text('@${inst['domain']}'),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('@${inst['domain']}'),
+                        if (isBlocked)
+                          const Text(
+                            'SUSPENDED',
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                      ],
+                    ),
                     trailing: PopupMenuButton<String>(
                       onSelected: (val) {
                         if (val == 'storage') _showEditStorageLimitDialog(inst);
@@ -359,6 +462,14 @@ class _ManageInstitutionsScreenState extends State<ManageInstitutionsScreen> {
                             ),
                           );
                         }
+                        if (val == 'block') _toggleBlock(inst['id'], true);
+                        if (val == 'unblock') _toggleBlock(inst['id'], false);
+                        if (val == 'delete') {
+                          _showDeleteInstConfirmation(
+                            inst['id'],
+                            inst['short_name'],
+                          );
+                        }
                       },
                       itemBuilder: (context) => [
                         const PopupMenuItem(
@@ -368,6 +479,30 @@ class _ManageInstitutionsScreenState extends State<ManageInstitutionsScreen> {
                         const PopupMenuItem(
                           value: 'campaign',
                           child: Text('Edit Campus Theme & Campaign'),
+                        ),
+                        const PopupMenuDivider(),
+                        if (!isBlocked)
+                          const PopupMenuItem(
+                            value: 'block',
+                            child: Text(
+                              'Suspend Campus',
+                              style: TextStyle(color: Colors.orange),
+                            ),
+                          ),
+                        if (isBlocked)
+                          const PopupMenuItem(
+                            value: 'unblock',
+                            child: Text(
+                              'Reactivate Campus',
+                              style: TextStyle(color: Colors.green),
+                            ),
+                          ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Text(
+                            'Delete Campus',
+                            style: TextStyle(color: Colors.red),
+                          ),
                         ),
                       ],
                     ),

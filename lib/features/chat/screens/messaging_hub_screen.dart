@@ -576,7 +576,13 @@ class _MessagingHubScreenState extends State<MessagingHubScreen>
                     initialLastSeen: initialLastSeen,
                   ),
                 ),
-              ).then((_) => _fetchConversations(silent: true));
+              ).then((result) {
+                if (result == true) {
+                  _fetchConversations(silent: false);
+                } else {
+                  _fetchConversations(silent: true);
+                }
+              });
             },
           );
         },

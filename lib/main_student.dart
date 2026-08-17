@@ -22,13 +22,18 @@ Future<void> main() async {
 
   final FlutterLocalNotificationsPlugin plugin =
       FlutterLocalNotificationsPlugin();
+
   final NotificationAppLaunchDetails? launchDetails = await plugin
       .getNotificationAppLaunchDetails();
 
   bool isAlarmLaunch = false;
+  String? alarmPayload;
+
   if (launchDetails?.didNotificationLaunchApp ?? false) {
-    if (launchDetails?.notificationResponse?.payload == 'alarm_screen') {
+    final payload = launchDetails?.notificationResponse?.payload;
+    if (payload != null && payload.startsWith('alarm_screen')) {
       isAlarmLaunch = true;
+      alarmPayload = payload;
     }
   }
 
@@ -51,14 +56,23 @@ Future<void> main() async {
         ),
         ChangeNotifierProvider(create: (_) => ThemeProvider()..initialize()),
       ],
-      child: CampusSquareStudentApp(isAlarmLaunch: isAlarmLaunch),
+      child: CampusSquareStudentApp(
+        isAlarmLaunch: isAlarmLaunch,
+        alarmPayload: alarmPayload,
+      ),
     ),
   );
 }
 
 class CampusSquareStudentApp extends StatelessWidget {
-  const CampusSquareStudentApp({super.key, required this.isAlarmLaunch});
+  const CampusSquareStudentApp({
+    super.key,
+    required this.isAlarmLaunch,
+    this.alarmPayload,
+  });
+
   final bool isAlarmLaunch;
+  final String? alarmPayload;
 
   @override
   Widget build(BuildContext context) {
@@ -71,7 +85,9 @@ class CampusSquareStudentApp extends StatelessWidget {
       darkTheme: themeProvider.darkTheme,
       themeMode: themeProvider.themeMode,
       debugShowCheckedModeBanner: false,
-      home: isAlarmLaunch ? const AlarmScreen() : const StudentRouteGuard(),
+      home: isAlarmLaunch
+          ? AlarmScreen(payload: alarmPayload)
+          : const StudentRouteGuard(),
     );
   }
 }
@@ -115,7 +131,6 @@ class StudentRouteGuard extends StatelessWidget {
           });
           return const LoginScreen();
         }
-
         return const Dashboard();
     }
   }

@@ -68,9 +68,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   final Set<String> _selectedMessageIds = {};
   final Map<String, GlobalKey> _messageKeys = {};
-
   final Set<String> _animatedMessageIds = {};
-
   String? _highlightedMsgId;
   bool _isParticipantBlocked = false;
 
@@ -267,6 +265,8 @@ class _ChatScreenState extends State<ChatScreen> {
               .firstOrNull;
           if (myParticipant != null && myParticipant['is_blocked'] == true) {
             setState(() => _isParticipantBlocked = true);
+          } else if (widget.isGroup && myParticipant == null) {
+            setState(() => _isParticipantBlocked = true);
           }
         }
       }
@@ -438,6 +438,18 @@ class _ChatScreenState extends State<ChatScreen> {
               setState(
                 () => _isParticipantBlocked = payload['is_blocked'] == true,
               );
+            }
+          } else if (type == 'participant_removed') {
+            if (payload['user_id'] == _currentUserId &&
+                mounted &&
+                !_isDisposing) {
+              setState(() => _isParticipantBlocked = true);
+            }
+          } else if (type == 'account_blocked') {
+            if (payload['user_id'] == _currentUserId &&
+                mounted &&
+                !_isDisposing) {
+              context.read<CampusSquareAuth>().logoutForcefully();
             }
           }
         },
@@ -618,8 +630,8 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     setState(() => _isUploadingAttachment = true);
-
     String? attachmentString;
+
     if (file != null) {
       try {
         final uploadRes = await _apiClient.authenticatedMultipartRequest(
@@ -662,8 +674,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
     final localId =
         retryLocalId ?? DateTime.now().millisecondsSinceEpoch.toString();
-
     String? replyToId;
+
     if (retryLocalId != null) {
       final existingMsg = _messages.firstWhere(
         (m) => m['local_id'] == localId,
@@ -1475,8 +1487,8 @@ class _ChatScreenState extends State<ChatScreen> {
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     )
                   : GestureDetector(
-                      onTap: () {
-                        Navigator.push(
+                      onTap: () async {
+                        final result = await Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) => ChatDetailsScreen(
@@ -1486,6 +1498,10 @@ class _ChatScreenState extends State<ChatScreen> {
                             ),
                           ),
                         );
+                        if (!context.mounted) return;
+                        if (result == true && mounted) {
+                          Navigator.pop(context, true);
+                        }
                       },
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.center,
@@ -1671,8 +1687,8 @@ class _ChatScreenState extends State<ChatScreen> {
                             final currentMsgDate = DateTime.parse(
                               msg['created_at'],
                             ).toLocal();
-
                             bool isFirstOfDay = false;
+
                             if (actualIndex == _messages.length - 1) {
                               isFirstOfDay = true;
                             } else {
@@ -2148,7 +2164,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 color: Colors.red.withValues(alpha: 0.1),
                                 width: double.infinity,
                                 child: const Text(
-                                  "You have been blocked from sending messages.",
+                                  "You are no longer able to send messages in this chat.",
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     color: Colors.red,
@@ -2795,6 +2811,7 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
   bool _isLoading = true;
   List<dynamic> _participants = [];
   IconData _groupIcon = Icons.group;
+  String? _conversationType;
 
   final List<IconData> _availableIcons = [
     Icons.computer,
@@ -2865,6 +2882,7 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
 
         if (currentConv != null) {
           setState(() {
+            _conversationType = currentConv['type'];
             _participants = currentConv['participants'] ?? [];
             _participants.sort((a, b) {
               if (a['is_approved'] == false && b['is_approved'] != false) {
@@ -2885,6 +2903,35 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showBlockConfirmation(String userId, String firstName) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Block User?'),
+        content: Text(
+          'Blocking $firstName will prevent them from sending messages in this chat, but they will still be able to see new messages.\n\nDo you want to continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _blockUser(userId, true);
+            },
+            child: const Text('Block'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _blockUser(String userId, bool block) async {
@@ -2941,28 +2988,78 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
     }
   }
 
+  void _confirmDeleteGroup() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Group?'),
+        content: const Text(
+          'Are you sure you want to delete this group? This action is permanent and will remove all messages, media, and members.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _deleteGroup();
+            },
+            child: const Text('Delete Group'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteGroup() async {
+    try {
+      final auth = context.read<CampusSquareAuth>();
+      final apiClient = ApiClient(baseUrl: auth.baseUrl);
+      final response = await apiClient.authenticatedRequest(
+        context,
+        "/api/hubs/${widget.conversationId}",
+        method: "DELETE",
+      );
+      if (response.statusCode == 200 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Group deleted successfully.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      debugPrint("Delete Group Error: $e");
+    }
+  }
+
   Future<void> _handleHubAction(String userId, String action) async {
     try {
       final auth = context.read<CampusSquareAuth>();
       final apiClient = ApiClient(baseUrl: auth.baseUrl);
-
-      if (action == 'make_lead') {
-        _showSelectTeamForLeadDialog(userId);
-        return;
-      }
 
       String endpoint = "";
       String method = "PATCH";
 
       if (action == 'approve') {
         endpoint = "/api/hubs/${widget.conversationId}/members/$userId/approve";
-      } else if (action == 'reject') {
+      } else if (action == 'reject' || action == 'remove') {
         endpoint = "/api/hubs/${widget.conversationId}/members/$userId/reject";
         method = "DELETE";
       } else if (action == 'promote') {
         endpoint = "/api/hubs/${widget.conversationId}/members/$userId/promote";
       } else if (action == 'demote') {
         endpoint = "/api/hubs/${widget.conversationId}/members/$userId/demote";
+      } else if (action == 'make_lead') {
+        endpoint =
+            "/api/hubs/${widget.conversationId}/members/$userId/make-lead";
       } else if (action == 'remove_lead') {
         endpoint =
             "/api/hubs/${widget.conversationId}/members/$userId/remove-lead";
@@ -2977,118 +3074,21 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
       if (response.statusCode == 200 && mounted) {
         _fetchDetails();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Success'), backgroundColor: Colors.green),
+          const SnackBar(
+            content: Text('Success'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed: ${response.body}'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } catch (e) {
       debugPrint("Action Error: $e");
-    }
-  }
-
-  void _showSelectTeamForLeadDialog(String userId) async {
-    try {
-      final auth = context.read<CampusSquareAuth>();
-      final apiClient = ApiClient(baseUrl: auth.baseUrl);
-      final res = await apiClient.authenticatedRequest(
-        context,
-        "/api/hubs?type=TEAM&parent_id=${widget.conversationId}",
-        method: "GET",
-      );
-
-      if (res.statusCode != 200 || !mounted) return;
-
-      final teams = jsonDecode(res.body) as List<dynamic>;
-
-      if (teams.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              "No teams exist in this Club yet. Please create a team first.",
-            ),
-          ),
-        );
-        return;
-      }
-
-      String selectedTeamId = teams.first['id'];
-      bool isSaving = false;
-
-      if (!mounted) return;
-
-      showDialog(
-        context: context,
-        builder: (ctx) => StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Assign Team Lead'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Select which team this user will lead:"),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedTeamId,
-                    decoration: const InputDecoration(
-                      labelText: "Team",
-                      border: OutlineInputBorder(),
-                    ),
-                    items: teams.map<DropdownMenuItem<String>>((t) {
-                      return DropdownMenuItem(
-                        value: t['id'] as String,
-                        child: Text(t['name'] as String),
-                      );
-                    }).toList(),
-                    onChanged: (val) =>
-                        setDialogState(() => selectedTeamId = val!),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: isSaving
-                      ? null
-                      : () async {
-                          setDialogState(() => isSaving = true);
-                          try {
-                            final response = await apiClient.authenticatedRequest(
-                              context,
-                              "/api/hubs/$selectedTeamId/members/$userId/make-lead",
-                              method: "PATCH",
-                            );
-                            if (response.statusCode == 200 && mounted) {
-                              Navigator.pop(ctx);
-                              _fetchDetails();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('User assigned as Team Lead!'),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-                            }
-                          } catch (e) {
-                            setDialogState(() => isSaving = false);
-                          }
-                        },
-                  child: isSaving
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Assign Lead'),
-                ),
-              ],
-            );
-          },
-        ),
-      );
-    } catch (e) {
-      debugPrint("Error showing team lead dialog: $e");
     }
   }
 
@@ -3166,6 +3166,13 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
     final userRole = currentUser?['role'] ?? 'STUDENT';
     final isStaff = userRole == 'ADMIN' || userRole == 'COMMUNITY_HEAD';
 
+    final myParticipant = _participants.firstWhere(
+      (p) => p['user']['id'] == currentUser?['id'],
+      orElse: () => null,
+    );
+    final bool iAmHubAdmin =
+        isStaff || (myParticipant != null && myParticipant['is_admin'] == true);
+
     return Scaffold(
       body: CustomScrollView(
         slivers: [
@@ -3173,6 +3180,15 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
             expandedHeight: 220.0,
             floating: false,
             pinned: true,
+            actions: [
+              if (widget.isGroup && iAmHubAdmin)
+                IconButton(
+                  icon: const Icon(Icons.delete_forever),
+                  color: Colors.redAccent,
+                  tooltip: "Delete Group",
+                  onPressed: _confirmDeleteGroup,
+                ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               centerTitle: true,
               title: Text(
@@ -3289,19 +3305,10 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
                     participant['is_admin'] == true;
                 final bool isParticipantHubLead =
                     participant['is_lead'] == true;
-                final String role = user['role'] ?? 'STUDENT';
 
+                final String role = user['role'] ?? 'STUDENT';
                 final bool isParticipantStaff =
                     role == 'ADMIN' || role == 'COMMUNITY_HEAD';
-
-                final myParticipant = _participants.firstWhere(
-                  (p) => p['user']['id'] == currentUser?['id'],
-                  orElse: () => null,
-                );
-                final bool iAmHubAdmin =
-                    isStaff ||
-                    (myParticipant != null &&
-                        myParticipant['is_admin'] == true);
 
                 final bool canBlock =
                     (isStaff || iAmHubAdmin) &&
@@ -3422,11 +3429,17 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
                   trailing: (canBlock || canManageHub)
                       ? PopupMenuButton<String>(
                           onSelected: (val) {
-                            if (val == 'block') _blockUser(user['id'], true);
+                            if (val == 'block') {
+                              _showBlockConfirmation(
+                                user['id'],
+                                user['first_name'],
+                              );
+                            }
                             if (val == 'unblock') _blockUser(user['id'], false);
                             if ([
                               'approve',
                               'reject',
+                              'remove',
                               'promote',
                               'demote',
                               'make_lead',
@@ -3453,6 +3466,21 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
                               ),
                               const PopupMenuDivider(),
                             ],
+
+                            if (canManageHub &&
+                                !isPending &&
+                                !isParticipantStaff &&
+                                user['id'] != currentUser?['id']) ...[
+                              const PopupMenuItem(
+                                value: 'remove',
+                                child: Text(
+                                  'Remove from Group',
+                                  style: TextStyle(color: Colors.red),
+                                ),
+                              ),
+                              const PopupMenuDivider(),
+                            ],
+
                             if (canManageHub &&
                                 !isPending &&
                                 !isParticipantHubAdmin) ...[
@@ -3480,7 +3508,8 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
                             if (canManageHub &&
                                 !isPending &&
                                 !isParticipantHubLead &&
-                                !isParticipantHubAdmin) ...[
+                                !isParticipantHubAdmin &&
+                                _conversationType == 'TEAM') ...[
                               const PopupMenuItem(
                                 value: 'make_lead',
                                 child: Text(
@@ -3493,7 +3522,8 @@ class _ChatDetailsScreenState extends State<ChatDetailsScreen> {
                             if (canManageHub &&
                                 !isPending &&
                                 isParticipantHubLead &&
-                                !isParticipantHubAdmin) ...[
+                                !isParticipantHubAdmin &&
+                                _conversationType == 'TEAM') ...[
                               const PopupMenuItem(
                                 value: 'remove_lead',
                                 child: Text(
