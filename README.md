@@ -5,7 +5,7 @@ Replacing chaotic WhatsApp & Telegram groups with a structured, domain-verified 
 
 ## 📖 About The Project
 
-**Campus Square** is a comprehensive, mobile-first ecosystem designed exclusively for university and college campuses. Built with **Flutter**, it tackles the fragmentation of student life by consolidating official announcements, peer-to-peer discussions and commerce, department-wise academic resources, real-time messaging, and community trust into a single, seamless application.
+**Campus Square** is a comprehensive, mobile-first ecosystem designed exclusively for university and college campuses. Built with **Flutter**, it tackles the fragmentation of student life by consolidating official announcements, peer-to-peer discussions and commerce, department-wise academic resources, hierarchical group chats (Hubs & Teams), real-time messaging, and community trust into a single, seamless application.
 
 Access is strictly governed by domain-locked authentication (e.g., `@institute.ac.in`), ensuring a secure, verified environment free from spam and external noise.
 
@@ -33,26 +33,31 @@ The mobile frontend is organized into several key operational modules:
 - **Resource Curation**: Upvote/downvote ranking algorithm that highlights quality study material and deprioritizes outdated content.
 - **Document Preview & In-App Viewers**: Native PDF preview, external browser launcher, and cached cloud document viewing.
 
-### 💬 4. Real-Time Chat & Messaging Hub
+### 💬 4. Real-Time Chat & Campus Hub
 
+- **Discord-Style Hubs**: Join official Clubs and peer-run Study Groups. Each Hub has a dedicated dashboard containing a main "General Chat" and multiple nested "Teams/Channels" managed by Hub Admins and Team Leads. Pull-to-refresh enabled across all group lists.
+- **Categorized Inbox**: The Messaging screen uses a tabbed layout, separating private 1-on-1 "Chats" (DMs) from large-scale "Hubs & Teams".
 - **WebSocket Connection**: Real-time DMs and group/department conversation streams.
+- **Real-Time Moderation**: WebSocket connections actively drop or restrict participants the moment they are removed from a group, blocked by a Hub Admin, or globally suspended, ensuring instant enforcement without requiring an app restart.
 - **Messaging Utilities**: Unread message boundary dividers, delivery/read receipts, typing indicators, image/file attachments, message editing, and 15-minute deletion rules.
 - **Customization**: Customizable chat wallpapers and local group icon selection.
+- **Visual Hierarchies**: Chat bubbles feature distinct visual badges (🛡️ Hub Admin, ⭐ Team Lead, ✔️ Staff) to establish authority and trust in large groups.
 
 ### 🔔 5. Push & Local Notifications
 
 - **Targeted FCM Notifications**: Automated alerts for new Bazaar items, Vault uploads, urgent announcements, and direct messages.
 - **Interactive Notification Center**: In-app bell icon history sheet for reviewing past announcements and system notices.
 
-### 📅 6. Local Timetable & Class Reminders
+### 📅 6. Cloud-Synced Timetable & Attendance
 
-- **Attendance Tracker**: Custom schedule builder to log attended/missed classes and track attendance percentages.
-- **Alarm & Lock Screen Reminders**: Configurable class reminder notifications (5, 10, 15, or 30 minutes before class) with lock-screen alarm triggers.
+- **Subject-wise Dashboards**: Create subjects, set target attendance policies (e.g., 75%), and track live metrics like total classes attended, missed, and how many more classes are "safe to miss".
+- **Interactive Lock-Screen Alarms**: Configurable class reminders (5 to 30 mins before) that trigger a full-screen alarm. Users can mark attendance (`Attended`, `Missed`, `Cancelled`) with a single tap directly from the alarm screen.
+- **Cloud Sync & History Log**: Full history of attendance records is safely stored in the backend database. Users can easily view, edit, or delete past logs if they made a mistake marking attendance.
 
 ### 🎨 7. Dynamic App Customization & Staff Control
 
 - **Backend-Driven Campaigns**: Supports live administrative theme hex color overrides, dynamic top banners, and one-time Lottie pop-up announcements on app launch.
-- **Staff Portals**: Dedicated moderation dashboards for Community Heads and Global Admins to manage members, set storage quotas, auto-assign roll numbers, and broadcast campus-wide push notifications.
+- **Staff Portals**: Dedicated moderation dashboards for Community Heads and Global Admins to manage members, assign Hub Admins, suspend or permanently delete entire campus instances, set storage quotas, auto-assign roll numbers, and broadcast campus-wide push notifications.
 
 ## 🛠️ Tech Stack & Dependencies
 
@@ -103,16 +108,14 @@ Campus Square follows a **Feature-First Layered Architecture** with strict separ
 
 1. **Presentation Layer** (`lib/features/`)
 
-Each major feature of the app (Square, Bazaar, Vault, Chat) is isolated in its own folder. The UI relies on `context.watch<T>()` to rebuild reactively when the underlying state changes. Navigation is handled natively, with the `AuthRouteGuard` acting as the gatekeeper to prevent unauthenticated access.
+Each major feature of the app (Square, Bazaar, Vault, Hubs, Chat, Timetable) is isolated in its own folder. The UI relies on `context.watch<T>()` to rebuild reactively when the underlying state changes. Navigation is handled natively, with distinct entry points (`main_student.dart` and `main_staff.dart`) utilizing dedicated routing guards (`StudentRouteGuard` and `StaffRouteGuard`) to gatekeep unauthenticated or unauthorized access based on user roles.
 
 2. **State Management** (`ChangeNotifier` + `Provider`)
 
-Global app state is managed using the `provider` package at the root of the app (`main.dart`).
+Global app state is managed using the `provider` package at the root of the app.
 
 - **CampusSquareAuth**: Acts as the source of truth for the user's identity. It loads the cached profile on startup and handles JWT lifecycle (login, logout, forced password changes).
-
 - **ThemeProvider**: Listens for dynamic hex codes from the backend (`/api/utils/app-campaign`) and instantly repaints the `MaterialApp` theme.
-
 - **NotificationProvider**: A `ChangeNotifierProxyProvider` that depends on `CampusSquareAuth`. It listens to Firebase streams and maintains the in-app notification center history.
 
 3. **Data & Networking** (`ApiClient`)
@@ -120,15 +123,12 @@ Global app state is managed using the `provider` package at the root of the app 
 The `ApiClient` is a custom wrapper around the Dart `http` package. It provides centralized logic for:
 
 - **Token Injection**: Automatically attaches `Bearer <token>` to every request.
-
 - **Token Rotation**: Intercepts `401 Unauthorized` responses, uses the Refresh Token to get a new Access Token, and retries the failed request seamlessly.
-
 - **Offline-First Fallback**: Intercepts `SocketException` (no internet). If the request is a `GET`, it searches `SharedPreferences` for a cached JSON string and returns it with a `200 OK`, triggering an `isOfflineNotifier` to show an "Offline Mode" banner in the UI.
 
 4. **Local Persistence** (`SecureStorageService`)
 
 - **flutter_secure_storage**: Used for highly sensitive data (JWTs, User Profile, Chat Drafts, Failed Messages queue).
-
 - **shared_preferences**: Used for non-sensitive, high-volume data (API GET response caching, UI themes, FCM topic toggles, offline timetable arrays).
 
 ## 🔄 Data Flow Lifecycles
@@ -149,7 +149,7 @@ The `ApiClient` is a custom wrapper around the Dart `http` package. It provides 
 
 2. **Real-Time Chat & WebSocket Lifecycle**
 
-When a user enters a Direct Message (`ChatScreen`):
+When a user enters a Direct Message or Team Chat (`ChatScreen`):
 
 - **Init**: The app fetches message history via REST (`GET /api/chat/.../messages`).
 
@@ -190,20 +190,18 @@ lib/
 │   ├── admin/                         # Global Admin Dashboards & Broadcasts
 │   ├── auth/                          # Login, Register, OTP, AuthProvider
 │   ├── bazaar/                        # Marketplace listing, buying, and selling
-│   ├── chat/                          # WebSocket Chat UI, Media Viewers, Hub
+│   ├── chat/                          # WebSocket Chat UI, Media Viewers, Messaging Hub
 │   ├── community/                     # Community Head specific moderation tools
 │   ├── dashboard/                     # Root navigation & Dynamic Banners
+│   ├── hubs/                          # Club Dashboards, Study Groups, Team Management
 │   ├── profile/                       # User settings, Karma UI, Quotas
 │   ├── square/                        # Community Feed, Voting, Nested Comments
-│   ├── timetable/                     # Local Schedule & Attendance tracking
+│   ├── timetable/                     # Cloud Schedule & Attendance tracking
 │   └── vault/                         # Department-wise academic file storage
 │
-├── shared/
-│   └── widgets/
-│       └── auth_route_guard.dart      # Root widget routing users based on JWT state
-│
 ├── firebase_options.dart              # Auto-generated FlutterFire config
-└── main.dart                          # App Entrypoint & Provider injection
+├── main_student.dart                  # Application Entrypoint for Students
+└── main_staff.dart                    # Application Entrypoint for Staff/Admins
 ```
 
 ## 🚀 Getting Started
@@ -241,8 +239,14 @@ lib/
    - Configure Firebase for iOS using Xcode or run flutterfire configure.
 
 5. Run the application
-   ```bash
-   flutter run
-   ```
+
+- To run the Student app:
+  ```bash
+  flutter build apk -t lib/main_student.dart --no-tree-shake-icons
+  ```
+- To run the Staff & Admin portal:
+  ```bash
+  flutter build apk -t lib/main_staff.dart --no-tree-shake-icons
+  ```
 
 > Developed for the Campus Square Ecosystem.
